@@ -1,121 +1,230 @@
 <template>
-  <div class="app">
-    <header class="header">
-      <h1>自主决策Agent</h1>
-      <p>基于deepagents框架的智能助手</p>
-    </header>
-    
-    <main class="main">
-      <section class="input-section">
-        <h2>设置目标</h2>
-        <textarea 
-          v-model="goal" 
-          placeholder="请输入您的目标，例如：为周末制定一个详细的旅行计划，包括景点、交通和住宿"
-          rows="4"
-          :disabled="isRunning"
-        ></textarea>
-        
-        <div class="mode-selector">
-          <h3>交互模式</h3>
-          <div class="radio-group">
-            <label>
-              <input 
-                type="radio" 
-                v-model="mode" 
-                value="streaming" 
-                :disabled="isRunning"
-              >
-              流式模式 (实时显示)
-            </label>
-            <label>
-              <input 
-                type="radio" 
-                v-model="mode" 
-                value="non-streaming" 
-                :disabled="isRunning"
-              >
-              非流式模式 (完整显示)
-            </label>
-          </div>
-        </div>
-        
-        <button 
-          class="start-btn" 
-          @click="startAgent" 
-          :disabled="isRunning || !goal.trim()"
-        >
-          {{ isRunning ? '执行中...' : '开始执行' }}
-        </button>
-      </section>
-      
-      <section class="output-section">
-        <h2>执行过程</h2>
-        <div class="process-container" v-if="isRunning || processLogs.length > 0">
-          <div 
-            v-for="(log, index) in processLogs" 
-            :key="index" 
-            class="log-item"
-            :class="log.type"
-          >
-            <span class="log-time">{{ log.time }}</span>
-            <span class="log-content">{{ log.content }}</span>
-          </div>
-          <div class="loading" v-if="isRunning">
-            <span class="loading-dot"></span>
-            <span class="loading-dot"></span>
-            <span class="loading-dot"></span>
-          </div>
-        </div>
-        <div class="empty-state" v-else>
-          执行结果将显示在这里
-        </div>
-      </section>
-      
-      <section class="result-section" v-if="result">
-        <h2>执行结果</h2>
-        <div class="result-container">
-          <div class="result-item">
-            <strong>阶段:</strong>
-            <p>{{ result.phase }}</p>
-          </div>
-          <div class="result-item">
-            <strong>结果:</strong>
-            <p>{{ result.result }}</p>
-          </div>
-          <div class="result-item">
-            <strong>完成状态:</strong>
-            <p :class="result.is_completed ? 'completed' : 'pending'">
-              {{ result.is_completed ? '完成' : '未完成' }}
+  <div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-primary to-secondary shadow-lg">
+      <div class="container mx-auto px-4 py-6">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+          <div class="text-center md:text-left mb-4 md:mb-0">
+            <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">
+              自主决策Agent
+            </h1>
+            <p class="text-white text-opacity-90">
+              基于deepagents框架的智能助手
             </p>
           </div>
-          <div class="result-item" v-if="result.todos && result.todos.length > 0">
-            <strong>待办事项:</strong>
-            <ul>
-              <li v-for="(todo, index) in result.todos" :key="index">
-                <span :class="todo.status">{{ todo.content }}</span>
-                <span class="todo-status">({{ todo.status }})</span>
-              </li>
-            </ul>
-          </div>
-          <div class="result-item" v-else-if="result.todos">
-            <strong>待办事项:</strong>
-            <p>无待办事项</p>
+          <div class="flex items-center space-x-2">
+            <button class="btn bg-white text-primary hover:bg-gray-100">
+              <i class="fas fa-question-circle mr-1"></i>
+              帮助
+            </button>
+            <button class="btn bg-white text-primary hover:bg-gray-100">
+              <i class="fas fa-cog mr-1"></i>
+              设置
+            </button>
           </div>
         </div>
-      </section>
+      </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+      <div class="flex flex-col lg:flex-row gap-4" id="main-container">
+        <!-- Left Sidebar with Resize Handle -->
+        <div class="lg:w-1/4 space-y-6 resizeable-sidebar" ref="sidebarRef" :style="{ width: sidebarWidth + 'px' }">
+          <!-- Todo List Component -->
+          <div class="card shadow-lg">
+            <TodoList :todos="todos" />
+          </div>
+          
+          <!-- Memory Component -->
+          <div class="card shadow-lg">
+            <MemoryComponent />
+          </div>
+          
+          <!-- Resize Handle -->
+          <div class="resize-handle right-handle" @mousedown="startResize('sidebar', $event)"></div>
+        </div>
+        
+        <!-- Right Content -->
+        <div class="lg:flex-1 space-y-6 flex-1" :style="{ width: 'calc(100% - ' + (sidebarWidth + 16) + 'px)' }">
+          <!-- Input Section -->
+          <div class="card shadow-lg">
+            <h2 class="text-xl font-semibold mb-6 flex items-center">
+              <i class="fas fa-bullseye mr-2 text-primary"></i>
+              设置目标
+            </h2>
+            
+            <textarea 
+              v-model="goal" 
+              placeholder="请输入您的目标，例如：为周末制定一个详细的旅行计划，包括景点、交通和住宿"
+              rows="4"
+              :disabled="isRunning"
+              class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300"
+            ></textarea>
+            
+            <div class="mt-6 mb-8">
+              <h3 class="text-md font-medium text-gray-700 mb-3">交互模式</h3>
+              <div class="flex flex-col sm:flex-row gap-4">
+                <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer transition-all duration-300 hover:border-primary"
+                       :class="{ 'border-primary bg-primary bg-opacity-5': mode === 'streaming' }">
+                  <input 
+                    type="radio" 
+                    v-model="mode" 
+                    value="streaming" 
+                    :disabled="isRunning"
+                    class="mr-3 accent-primary"
+                  >
+                  <div>
+                    <div class="font-medium">流式模式</div>
+                    <div class="text-sm text-gray-500">实时显示执行过程</div>
+                  </div>
+                </label>
+                <label class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer transition-all duration-300 hover:border-primary"
+                       :class="{ 'border-primary bg-primary bg-opacity-5': mode === 'non-streaming' }">
+                  <input 
+                    type="radio" 
+                    v-model="mode" 
+                    value="non-streaming" 
+                    :disabled="isRunning"
+                    class="mr-3 accent-primary"
+                  >
+                  <div>
+                    <div class="font-medium">非流式模式</div>
+                    <div class="text-sm text-gray-500">完整显示执行结果</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            <button 
+              class="btn btn-primary w-full py-3 text-lg font-medium"
+              @click="startAgent" 
+              :disabled="isRunning || !goal.trim()"
+            >
+              <template v-if="isRunning">
+                <i class="fas fa-spinner fa-spin mr-2"></i>
+                执行中...
+              </template>
+              <template v-else>
+                <i class="fas fa-play mr-2"></i>
+                开始执行
+              </template>
+            </button>
+          </div>
+          
+          <!-- Output Section -->
+          <div class="card shadow-lg">
+            <h2 class="text-xl font-semibold mb-6 flex items-center">
+              <i class="fas fa-stream mr-2 text-primary"></i>
+              执行过程
+            </h2>
+            
+            <div v-if="isRunning || processLogs.length > 0" class="relative">
+              <div class="process-container max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
+                <div 
+                  v-for="(log, index) in processLogs" 
+                  :key="index" 
+                  class="log-item"
+                  :class="'log-item-' + log.type"
+                >
+                  <div class="flex items-start">
+                    <span class="text-xs text-gray-500 mr-3 mt-1 whitespace-nowrap">{{ log.time }}</span>
+                    <span class="flex-1 text-sm">{{ log.content }}</span>
+                  </div>
+                </div>
+                
+                <div class="loading flex items-center mt-4" v-if="isRunning">
+                  <span class="loading-dot w-2 h-2 bg-primary rounded-full mr-1"></span>
+                  <span class="loading-dot w-2 h-2 bg-primary rounded-full mr-1"></span>
+                  <span class="loading-dot w-2 h-2 bg-primary rounded-full"></span>
+                  <span class="ml-2 text-sm text-gray-500">执行中...</span>
+                </div>
+              </div>
+              
+              <!-- Scroll to bottom button -->
+              <button 
+                v-if="processLogs.length > 10"
+                class="absolute bottom-4 right-4 bg-white p-2 rounded-full shadow-md text-gray-600 hover:text-primary transition-colors duration-300"
+                @click="scrollToBottom"
+              >
+                <i class="fas fa-arrow-down"></i>
+              </button>
+            </div>
+            
+            <div v-else class="empty-state p-8 bg-gray-50 rounded-lg flex flex-col items-center justify-center">
+              <i class="fas fa-terminal text-3xl text-gray-300 mb-3"></i>
+              <p class="text-gray-500">执行结果将显示在这里</p>
+            </div>
+          </div>
+          
+          <!-- Result Section -->
+          <div class="card shadow-lg" v-if="result">
+            <h2 class="text-xl font-semibold mb-6 flex items-center">
+              <i class="fas fa-flag-checkered mr-2 text-primary"></i>
+              执行结果
+            </h2>
+            
+            <div class="result-container space-y-4">
+              <div class="p-4 bg-gray-50 rounded-lg">
+                <div class="font-medium text-gray-700 mb-2">阶段:</div>
+                <div class="text-lg">{{ result.phase }}</div>
+              </div>
+              
+              <div class="p-4 bg-gray-50 rounded-lg">
+                <div class="font-medium text-gray-700 mb-2">结果:</div>
+                <div class="text-lg whitespace-pre-wrap">{{ result.result }}</div>
+              </div>
+              
+              <div class="p-4 bg-gray-50 rounded-lg">
+                <div class="font-medium text-gray-700 mb-2">完成状态:</div>
+                <div 
+                  class="text-lg font-medium" 
+                  :class="result.is_completed ? 'text-success' : 'text-warning'"
+                >
+                  {{ result.is_completed ? '完成' : '未完成' }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
     
-    <footer class="footer">
-      <p>© 2026 自主决策Agent - 基于deepagents框架</p>
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+      <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+          <div class="mb-4 md:mb-0">
+            <p>© 2026 自主决策Agent - 基于deepagents框架</p>
+          </div>
+          <div class="flex space-x-4">
+            <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+              <i class="fab fa-github text-xl"></i>
+            </a>
+            <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+              <i class="fab fa-twitter text-xl"></i>
+            </a>
+            <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+              <i class="fab fa-linkedin text-xl"></i>
+            </a>
+          </div>
+        </div>
+      </div>
     </footer>
   </div>
 </template>
 
 <script>
 import axios from 'axios'
+import TodoList from './components/TodoList.vue'
+import MemoryComponent from './components/MemoryComponent.vue'
 
 export default {
   name: 'App',
+  components: {
+    TodoList,
+    MemoryComponent
+  },
   data() {
     return {
       goal: '',
@@ -124,7 +233,12 @@ export default {
       processLogs: [],
       result: null,
       eventSource: null,
-      currentStream: null // 用于存储当前流式会话的信息
+      currentStream: null, // 用于存储当前流式会话的信息
+      todos: [], // 用于存储todo列表
+      sidebarWidth: 320, // 默认侧边栏宽度
+      isResizing: false,
+      resizeType: null,
+      startX: 0
     }
   },
   methods: {
@@ -136,6 +250,7 @@ export default {
       this.result = null
       this.isRunning = true
       this.currentStream = null
+      this.todos = [] // 重置todos数组
       
       if (this.mode === 'streaming') {
         this.startStreamingMode()
@@ -144,6 +259,132 @@ export default {
       }
     },
     
+    scrollToBottom() {
+      const container = document.querySelector('.process-container')
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
+    },
+    
+    processContentForTodos(content) {
+      // Check if content contains todo update
+      if (content.includes('Updated todo list to ')) {
+        // Extract the todo list part
+        const startIdx = content.indexOf('Updated todo list to ') + 'Updated todo list to '.length;
+        // Find the end of the todo list (matching closing bracket)
+        let bracketCount = 0;
+        let endIdx = startIdx;
+        for (let i = startIdx; i < content.length; i++) {
+          if (content[i] === '[') {
+            bracketCount++;
+          } else if (content[i] === ']') {
+            bracketCount--;
+            if (bracketCount === 0) {
+              endIdx = i + 1;
+              break;
+            }
+          }
+        }
+        // Extract the todo list string
+        const todoListStr = content.substring(startIdx, endIdx);
+        // Try to parse the todo list
+        try {
+          // Replace single quotes with double quotes to make it valid JSON
+          const validJsonStr = todoListStr.replace(/'/g, '"');
+          const todos = JSON.parse(validJsonStr);
+          // Update the todos array
+          this.todos = todos;
+          // Return the remaining content
+          return content.substring(endIdx).trim();
+        } catch (error) {
+          console.error('Failed to parse todo list:', error);
+          // If parsing fails, return the original content
+          return content;
+        }
+      }
+      // If no todo update, return original content
+      return content;
+    },
+
+    updateTodoListOnCompletion() {
+      // Check if there are any todos
+      if (!this.todos || this.todos.length === 0) {
+        return;
+      }
+      
+      // Find the last in-progress step
+      let lastInProgressIndex = -1;
+      for (let i = this.todos.length - 1; i >= 0; i--) {
+        if (this.todos[i].status === 'in_progress') {
+          lastInProgressIndex = i;
+          break;
+        }
+      }
+      
+      // If there's an in-progress step
+      if (lastInProgressIndex !== -1) {
+        // Create a copy of the todos array to modify
+        const updatedTodos = [...this.todos];
+        
+        // Mark the last in-progress step as completed
+        updatedTodos[lastInProgressIndex].status = 'completed';
+        
+        // If it's not the last step, mark subsequent steps as skipped
+        if (lastInProgressIndex < updatedTodos.length - 1) {
+          for (let i = lastInProgressIndex + 1; i < updatedTodos.length; i++) {
+            updatedTodos[i].status = 'skipped';
+          }
+        }
+        
+        // Update the todos array
+        this.todos = updatedTodos;
+      }
+    },
+
+    // Resize-related methods
+    startResize(type, event) {
+      this.isResizing = true;
+      this.resizeType = type;
+      this.startX = event.clientX;
+      
+      // Add event listeners for mouse move and mouse up
+      document.addEventListener('mousemove', this.resize);
+      document.addEventListener('mouseup', this.stopResize);
+      
+      // Prevent default behavior
+      event.preventDefault();
+    },
+
+    resize(event) {
+      if (!this.isResizing) return;
+      
+      const deltaX = event.clientX - this.startX;
+      
+      if (this.resizeType === 'sidebar') {
+        // Calculate new width with minimum and maximum constraints
+        let newWidth = this.sidebarWidth + deltaX;
+        
+        // Minimum width: 200px
+        newWidth = Math.max(200, newWidth);
+        
+        // Maximum width: 50% of container
+        const containerWidth = document.getElementById('main-container').offsetWidth;
+        newWidth = Math.min(containerWidth * 0.5, newWidth);
+        
+        this.sidebarWidth = newWidth;
+        this.startX = event.clientX;
+      }
+    },
+
+    stopResize() {
+      this.isResizing = false;
+      this.resizeType = null;
+      
+      // Remove event listeners
+      document.removeEventListener('mousemove', this.resize);
+      document.removeEventListener('mouseup', this.stopResize);
+    },
+
     startStreamingMode() {
       // 流式模式：使用Server-Sent Events
       this.addLog('info', '开始执行自主决策Agent（流式模式）')
@@ -154,88 +395,127 @@ export default {
       
       this.eventSource.onmessage = (event) => {
         if (event.data === '[DONE]') {
-          this.eventSource.close()
-          this.isRunning = false
-          return
+            this.eventSource.close()
+            this.isRunning = false
+            
+            // Update todo list on completion
+            this.updateTodoListOnCompletion();
+            
+            // 处理完成后，从日志中提取最终结果
+            let finalResult = ''
+            for (let i = this.processLogs.length - 1; i >= 0; i--) {
+                const log = this.processLogs[i]
+                if (log.content && log.content.startsWith('主Agent (()): ')) {
+                    finalResult = log.content.replace('主Agent (()): ', '')
+                    break;
+                }
+            }
+            
+            // 设置结果对象
+            if (finalResult) {
+                this.result = {
+                    phase: 'reflect',
+                    result: finalResult,
+                    is_completed: true,
+                    todos: this.todos
+                }
+            }
+            
+            return
         }
         
         try {
-          const data = JSON.parse(event.data)
-          
-          // 处理不同类型的流式数据
-          if (data.type === 'token') {
-            // 处理LLM tokens
-            if (!data.content) return // 跳过空内容
+            const data = JSON.parse(event.data)
             
-            const source = data.source === 'main' ? '主Agent' : '子Agent'
-            const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
-                           Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
-            
-            // 检查是否是当前会话的连续内容
-            if (this.currentStream && this.currentStream.source === source && this.currentStream.namespace === namespace) {
-              // 更新当前会话的内容
-              this.currentStream.content += data.content
-              
-              // 更新最后一条日志
-              const lastLogIndex = this.processLogs.length - 1
-              if (lastLogIndex >= 0 && this.processLogs[lastLogIndex].type === 'streaming') {
-                this.processLogs[lastLogIndex].content = `${source}${namespace}: ${this.currentStream.content}`
-              }
-            } else {
-              // 开始新的会话
-              this.currentStream = {
-                source: source,
-                namespace: namespace,
-                content: data.content
-              }
-              
-              // 添加新的流式日志
-              this.processLogs.push({
-                time: this.getCurrentTime(),
-                type: 'streaming',
-                content: `${source}${namespace}: ${data.content}`
-              })
-            }
-          } else if (data.type === 'update') {
-            // 处理节点更新
-            const source = data.source === 'main' ? '主Agent' : '子Agent'
-            const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
-                           Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
-            
-            // 格式化更新数据
-            if (typeof data.data === 'object' && data.data !== null) {
-              Object.entries(data.data).forEach(([nodeName, nodeData]) => {
-                if (nodeName === 'tools') {
-                  // 处理工具调用结果
-                  if (nodeData.messages) {
-                    nodeData.messages.forEach(msg => {
-                      if (msg.type === 'tool') {
-                        this.addLog('success', `子Agent完成: ${msg.name}`)
-                        this.addLog('info', `  结果: ${msg.content}`)
-                      }
-                    })
-                  }
+            // 处理不同类型的流式数据
+            if (data.type === 'token') {
+                // 处理LLM tokens
+                if (!data.content) return // 跳过空内容
+                
+                // Process content to extract todos
+                let processedContent = this.processContentForTodos(data.content);
+                if (!processedContent) return; // Skip if all content was todo update
+                
+                const source = data.source === 'main' ? '主Agent' : '子Agent'
+                const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
+                               Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
+                
+                // 检查是否是当前会话的连续内容
+                if (this.currentStream && this.currentStream.source === source && this.currentStream.namespace === namespace) {
+                    // 更新当前会话的内容
+                    this.currentStream.content += processedContent
+                    
+                    // 更新最后一条日志
+                    const lastLogIndex = this.processLogs.length - 1
+                    if (lastLogIndex >= 0 && this.processLogs[lastLogIndex].type === 'streaming') {
+                        this.processLogs[lastLogIndex].content = `${source}${namespace}: ${this.currentStream.content}`
+                    }
                 } else {
-                  this.addLog('info', `${source}${namespace}: 步骤: ${nodeName}`)
+                    // 开始新的会话
+                    this.currentStream = {
+                        source: source,
+                        namespace: namespace,
+                        content: processedContent
+                    }
+                    
+                    // 添加新的流式日志
+                    this.processLogs.push({
+                        time: this.getCurrentTime(),
+                        type: 'streaming',
+                        content: `${source}${namespace}: ${this.currentStream.content}`
+                    })
                 }
-              })
+            } else if (data.type === 'update') {
+                // 处理节点更新
+                const source = data.source === 'main' ? '主Agent' : '子Agent'
+                const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
+                               Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
+                
+                // 格式化更新数据
+                if (typeof data.data === 'object' && data.data !== null) {
+                    Object.entries(data.data).forEach(([nodeName, nodeData]) => {
+                        if (nodeName === 'tools') {
+                            // 处理工具调用结果
+                            if (nodeData.messages) {
+                                nodeData.messages.forEach(msg => {
+                                    if (msg.type === 'tool') {
+                                        this.addLog('success', `子Agent完成: ${msg.name}`)
+                                        this.addLog('info', `  结果: ${msg.content}`)
+                                    }
+                                })
+                            }
+                        } else {
+                            this.addLog('info', `${source}${namespace}: 步骤: ${nodeName}`)
+                        }
+                    })
+                }
+            } else if (data.type === 'final_status') {
+                // 处理最终状态更新
+                this.todos = data.todos || []
+                
+                // 更新结果对象
+                this.result = {
+                    phase: 'reflect',
+                    result: data.content || '执行完成',
+                    is_completed: data.is_completed,
+                    todos: this.todos
+                }
+            } else if (data.type === 'custom') {
+                // 处理自定义事件
+                const source = data.source === 'main' ? '主Agent' : '子Agent'
+                const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
+                               Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
+                this.addLog('info', `${source}${namespace}: 自定义事件: ${JSON.stringify(data.event)}`)
+            } else if (data.type === 'fallback') {
+                // 处理回退结果
+                this.result = data.content
+            } else {
+                // 默认处理
+                this.addLog('info', JSON.stringify(data))
             }
-          } else if (data.type === 'custom') {
-            // 处理自定义事件
-            const source = data.source === 'main' ? '主Agent' : '子Agent'
-            const namespace = typeof data.namespace === 'string' ? ` (${data.namespace})` : 
-                           Array.isArray(data.namespace) && data.namespace.length > 0 ? ` (${data.namespace.join(', ')})` : ''
-            this.addLog('info', `${source}${namespace}: 自定义事件: ${JSON.stringify(data.event)}`)
-          } else if (data.type === 'fallback') {
-            // 处理回退结果
-            this.result = data.content
-          } else {
-            // 默认处理
-            this.addLog('info', JSON.stringify(data))
-          }
         } catch (error) {
-          console.error('解析SSE数据失败:', error)
-          console.error('原始数据:', event.data)
+            console.error('解析SSE数据失败:', error)
+            console.error('原始数据:', event.data)
         }
       }
       
@@ -248,49 +528,109 @@ export default {
     },
     
     startNonStreamingMode() {
-      // 非流式模式：使用普通HTTP请求
-      this.addLog('info', '开始执行自主决策Agent（非流式模式）')
-      this.addLog('info', `目标: ${this.goal}`)
-      this.addLog('info', '正在执行，请稍候...')
-      
-      // 调用后端的非流式API
-      axios.post('http://localhost:8000/run-agent', {
-        goal: this.goal,
-        mode: 'non-streaming'
-      })
-      .then(response => {
-        if (response.data.success) {
-          const resultData = response.data.data
-          
-          this.addLog('info', `=== ${resultData.phase} 阶段 ===`)
-          this.addLog('info', `结果: ${resultData.result}`)
-          
-          if (resultData.is_completed) {
-            this.addLog('success', '\n=== 目标完成 ===')
-          } else {
-            this.addLog('info', '\n=== 目标进行中 ===')
-          }
-          
-          if (resultData.todos && resultData.todos.length > 0) {
-            this.addLog('info', '\n=== 待办事项 ===')
-            resultData.todos.forEach(todo => {
-              this.addLog(todo.status, `  ${todo.content} (${todo.status})`)
-            })
-          }
-          
-          this.result = resultData
-        } else {
-          this.addLog('error', '执行失败: ' + response.data.message)
-        }
-        this.isRunning = false
-      })
-      .catch(error => {
-        console.error('API请求失败:', error)
-        this.addLog('error', '执行失败，请重试')
-        this.isRunning = false
-      })
+        // 非流式模式：使用普通HTTP请求
+        this.addLog('info', '开始执行自主决策Agent（非流式模式）')
+        this.addLog('info', `目标: ${this.goal}`)
+        this.addLog('info', '正在执行，请稍候...')
+        
+        // 调用后端的非流式API
+        axios.post('http://localhost:8000/run-agent', {
+            goal: this.goal,
+            mode: 'non-streaming'
+        })
+        .then(response => {
+            if (response.data.success) {
+                const resultData = response.data.data
+                
+                // 检查是否是新的消息格式
+                if (resultData.messages && Array.isArray(resultData.messages)) {
+                    // 显示所有消息
+                    let finalAiMessage = null
+                    
+                    for (const message of resultData.messages) {
+                        if (message.type === 'human') {
+                            // 人类消息
+                            this.addLog('info', `用户: ${message.content}`)
+                        } else if (message.type === 'ai') {
+                            // AI消息
+                            if (message.tool_calls && message.tool_calls.length > 0) {
+                                // 工具调用
+                                this.addLog('info', `主Agent (()): ${message.content || '正在调用工具...'}`)
+                                for (const toolCall of message.tool_calls) {
+                                    if (toolCall.function) {
+                                        const funcName = toolCall.function.name
+                                        let args = {}
+                                        try {
+                                            args = JSON.parse(toolCall.function.arguments)
+                                            // 检查是否有todos
+                                            if (args.todos) {
+                                                this.todos = args.todos
+                                            }
+                                        } catch (e) {
+                                            args = toolCall.function.arguments
+                                        }
+                                        this.addLog('info', `  调用工具: ${funcName} ${JSON.stringify(args)}`)
+                                    }
+                                }
+                            } else {
+                                // 普通回复
+                                this.addLog('info', `主Agent (()): ${message.content}`)
+                                finalAiMessage = message
+                            }
+                        } else if (message.type === 'tool') {
+                            // 工具结果
+                            this.addLog('info', `工具 ${message.name}: ${message.content}`)
+                        }
+                    }
+                    
+                    // 显示结果
+                    this.addLog('info', `=== reflect 阶段 ===`)
+                    this.addLog('info', `结果: ${finalAiMessage ? finalAiMessage.content : '执行完成'}`)
+                    this.addLog('success', '\n=== 目标完成 ===')
+                    
+                    // 构建结果对象
+                    this.result = {
+                        phase: 'reflect',
+                        result: finalAiMessage ? finalAiMessage.content : '执行完成',
+                        is_completed: true,
+                        todos: this.todos
+                    }
+                } else {
+                    // 旧格式处理
+                    this.addLog('info', `=== ${resultData.phase} 阶段 ===`)
+                    this.addLog('info', `结果: ${resultData.result}`)
+                    
+                    if (resultData.is_completed) {
+                        this.addLog('success', '\n=== 目标完成 ===')
+                    } else {
+                        this.addLog('info', '\n=== 目标进行中 ===')
+                    }
+                    
+                    if (resultData.todos && resultData.todos.length > 0) {
+                        this.todos = resultData.todos
+                        this.addLog('info', '\n=== 待办事项 ===')
+                        resultData.todos.forEach(todo => {
+                            this.addLog(todo.status, `  ${todo.content} (${todo.status})`)
+                        })
+                    }
+                    
+                    this.result = resultData
+                }
+            } else {
+                this.addLog('error', '执行失败: ' + response.data.message)
+            }
+            // Update todo list on completion
+            this.updateTodoListOnCompletion();
+            
+            this.isRunning = false
+        })
+        .catch(error => {
+            console.error('API请求失败:', error)
+            this.addLog('error', '执行失败，请重试')
+            this.isRunning = false
+        })
     },
-    
+
     simulateStreamingOutput() {
       // 模拟流式输出
       const steps = [
@@ -696,5 +1036,40 @@ export default {
     flex-direction: column;
     gap: 10px;
   }
+}
+
+/* Resize handle styles */
+.resizeable-sidebar {
+  position: relative;
+  min-width: 200px;
+  max-width: 50%;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.right-handle {
+  right: -3px;
+}
+
+.resize-handle:hover {
+  background-color: rgba(74, 144, 226, 0.3);
+}
+
+.resize-handle:active {
+  background-color: rgba(74, 144, 226, 0.6);
+}
+
+/* Custom cursor during resize */
+body.resize-active {
+  cursor: col-resize;
+  user-select: none;
 }
 </style>

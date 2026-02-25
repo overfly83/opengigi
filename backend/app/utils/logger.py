@@ -41,20 +41,20 @@ class CustomLogger(logging.Logger):
         # 添加处理器
         self.addHandler(console_handler)
     
-    def debug(self, message: str, **kwargs):
-        super().debug(message, **kwargs)
+    def debug(self, msg, *args, **kwargs):
+        super().debug(msg, *args, **kwargs)
     
-    def info(self, message: str, **kwargs):
-        super().info(message, **kwargs)
+    def info(self, msg, *args, **kwargs):
+        super().info(msg, *args, **kwargs)
     
-    def warning(self, message: str, **kwargs):
-        super().warning(message, **kwargs)
+    def warning(self, msg, *args, **kwargs):
+        super().warning(msg, *args, **kwargs)
     
-    def error(self, message: str, **kwargs):
-        super().error(message, **kwargs)
+    def error(self, msg, *args, **kwargs):
+        super().error(msg, *args, **kwargs)
     
-    def critical(self, message: str, **kwargs):
-        super().critical(message, **kwargs)
+    def critical(self, msg, *args, **kwargs):
+        super().critical(msg, *args, **kwargs)
 
 class CustomFormatter(logging.Formatter):
     """自定义格式器，支持颜色"""
@@ -79,8 +79,23 @@ class CustomFormatter(logging.Formatter):
         
         return colored_message
 
-def get_logger(name: str, level: int = logging.INFO) -> CustomLogger:
-    """获取自定义日志实例"""
+def get_logger(name: str) -> CustomLogger:
+    """获取自定义日志实例，使用环境变量设置日志级别"""
+    # 从环境变量获取日志级别
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    
+    # 映射日志级别名称到数字
+    level_map = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL
+    }
+    
+    # 获取日志级别数字
+    level = level_map.get(log_level, logging.INFO)
+    
     logging.setLoggerClass(CustomLogger)
     logger = logging.getLogger(name)
     logger.setLevel(level)

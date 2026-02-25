@@ -1,13 +1,37 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-import uvicorn
+from contextlib import asynccontextmanager
 import json
 from app.agent.agent import AutonomousAgent
 import asyncio
 from pydantic import BaseModel
+# 导入自定义日志
+from app.utils.logger import get_logger
 
-app = FastAPI()
+
+logger = get_logger(__name__)
+
+# 创建全局Agent实例
+agent = AutonomousAgent()
+
+# 定义生命周期事件处理
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时执行
+    logger.info("Starting up...")
+    # 异步加载 MCP 工具
+    try:
+        await agent.start_up()
+        logger.info("Agent started up successfully")
+    except Exception as e:
+        logger.error(f"Failed to start up agent: {e}")
+        raise e
+    yield
+    # 关闭时执行
+    logger.info("Shutting down...")
+
+app = FastAPI(lifespan=lifespan)
 
 # 配置CORS
 app.add_middleware(
@@ -17,9 +41,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 创建全局Agent实例
-agent = AutonomousAgent()
 
 # 请求模型
 class AgentRequest(BaseModel):

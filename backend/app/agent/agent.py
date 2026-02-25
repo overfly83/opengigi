@@ -1,54 +1,46 @@
-import os
-import dotenv
-
 from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
 from app.models.models import AgentResponse
 # 导入中间件
-from app.middleware.tool_logger import log_tool_calls
+from app.middleware.logger_middleware import LoggerMiddleware
 # 导入技能和工具注册表
 from app.skills import skill_registry
-from app.tools import tool_registry
-import logging
+from app.tools.registry import ToolRegistry
+# 导入自定义日志
+from app.utils.logger import get_logger
+# 导入配置
+from config.settings import settings
 
-logger = logging.getLogger(__name__)
-
-# 加载环境变量
-dotenv.load_dotenv()
+logger = get_logger(__name__)
 
 
 class AutonomousAgent:
     def __init__(self):
         """初始化自主决策Agent"""
-        # 从环境变量读取配置
-        model_name = os.getenv("MODEL_NAME")
-        temperature = float(os.getenv("MODEL_TEMPERATURE"))
-        
         # 初始化LLM
         self.llm = ChatOpenAI(
-            model=model_name,
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("BASE_URL"),
-            temperature=temperature,
-            timeout=30,  # 添加超时设置
-            max_retries=3,  # 添加重试机制
+            model=settings.MODEL_NAME,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.BASE_URL,
+            temperature=settings.MODEL_TEMPERATURE,
+            timeout=settings.MODEL_TIMEOUT,
+            max_retries=settings.MODEL_MAX_RETRIES,
         )
-    
-        # 获取所有注册的工具
-        def get_tool_instances():
-            """获取所有注册的工具实例"""
-            instances = []
-            
-            # 添加工具实例（LangChain tools are already callable functions）
-            for tool_name in tool_registry.tools:
-                tool_func = tool_registry.tools[tool_name]
-                instances.append(tool_func)
-            
-            return instances
-        
-        # 准备工具列表
-        tools = get_tool_instances()
-        logger.info(f"Loaded tools: {[tool.name for tool in tools]}")
+
+        self.agent = None
+
+    async def start_up(self):
+        """初始化Agent"""
+        # 初始化ToolRegistry实例
+        self.tool_registry = ToolRegistry()
+
+        await self.tool_registry.load_tools()
+
+        await self.tool_registry.load_mcp_tools()
+
+        # 加载工具
+        tools = list(self.tool_registry.tools.values())
+
         # 获取技能目录（用于Deep Agent技能）
         skills_directory = skill_registry.get_skills_directory()
         
@@ -59,10 +51,10 @@ class AutonomousAgent:
                     You strictly follow the logical chain of Think - Plan - Execute - Observe - Reflect - Adjust to accomplish any goal set by the user.
                     Core Workflow:
                     Think: Deeply analyze the user's goal, understand the core demand and success conditions.
-                    Plan: Break down the goal into atomic, executable steps.
-                    Execute: Perform tasks step by step according to the plan.
+                    Plan: Always use write_dotos to break down the goal into atomic, executable steps.
+                    Execute: Perform tasks step by step based on the plan.
                     Observe: Collect feedback and results during execution.
-                    Reflect: Analyze gaps between actual results and expectations, identify problems.
+                    Reflect: Analyze gaps between actual results and expectations, identify problems if any.
                     Adjust: Optimize the plan and execution strategy based on reflection.
                     Note:
                     - If the goal is completed, set is_completed to True.
@@ -73,7 +65,7 @@ class AutonomousAgent:
                 tools=tools,
                 skills=[skills_directory],
                 response_format=AgentResponse,
-                middleware=[log_tool_calls]
+                middleware=[LoggerMiddleware()]
             )
     
     def run(self, goal: str) -> dict:

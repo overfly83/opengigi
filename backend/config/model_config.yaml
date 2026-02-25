@@ -1,0 +1,24 @@
+# Model Provider Configuration
+# This file contains configurations for different model providers
+
+providers:
+  # Zhipu (BigModel) configuration
+  zhipu:
+    api_key: "d173f2e988594e658ed179f6ad9d8821.Lgsye25qMx9ogSk6"
+    base_url: "https://open.bigmodel.cn/api/paas/v4/"
+    model_name: "glm-4-flash"
+    model_temperature: 0.1
+    timeout: 30
+    max_retries: 3
+
+  # VolcEngine configuration
+  volcengine:
+    api_key: "1759e636-6aaa-4f60-b41a-6d906d74ace4"
+    base_url: "https://ark.cn-beijing.volces.com/api/v3"
+    model_name: "doubao-seed-1-8-251228"
+    model_temperature: 0.1
+    timeout: 30
+    max_retries: 3
+
+# Default provider (used if not specified in .env)
+default_provider: "zhipu"

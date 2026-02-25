@@ -1,29 +1,66 @@
 #!/usr/bin/env python3
 """
-Example LangChain Tool
+Advanced Calculator Tool
 
-This is a template for creating new LangChain tools.
+This tool performs various arithmetic operations including:
+- Basic operations: addition, subtraction, multiplication, division
+- Advanced operations: exponents, square roots, factorials
+- Order of operations with parentheses
 """
 
 from app.tools import tool
+import math
 
 
 @tool
-def example_tool(endpoint: str, method: str = "GET", **kwargs) -> dict:
-    """An example tool that performs a simple API call
+def calculator(expression: str) -> dict:
+    """Advanced calculator that evaluates arithmetic expressions
     
     Args:
-        endpoint: API endpoint to call
-        method: HTTP method (GET, POST, PUT, DELETE)
-        **kwargs: Additional parameters
+        expression: Arithmetic expression to evaluate (e.g., "2 + 3 * 4", "sqrt(16)", "(5 + 3) ^ 2")
         
     Returns:
-        Mock API response
+        Calculation result
     """
-    return {
-        "status": "success",
-        "endpoint": endpoint,
-        "method": method,
-        "data": kwargs,
-        "message": "Example tool call successful"
-    }
+    try:
+        # Replace common math functions with Python equivalents
+        expr = expression.replace('^', '**')
+        expr = expr.replace('sqrt(', 'math.sqrt(')
+        expr = expr.replace('sin(', 'math.sin(')
+        expr = expr.replace('cos(', 'math.cos(')
+        expr = expr.replace('tan(', 'math.tan(')
+        expr = expr.replace('log(', 'math.log(')
+        expr = expr.replace('ln(', 'math.log(')
+        expr = expr.replace('pi', 'math.pi')
+        expr = expr.replace('e', 'math.e')
+        
+        # Evaluate the expression safely
+        result = eval(expr, {"math": math})
+        
+        return {
+            "status": "success",
+            "expression": expression,
+            "result": result,
+            "message": "Calculation successful"
+        }
+    except ZeroDivisionError:
+        return {
+            "status": "error",
+            "expression": expression,
+            "result": None,
+            "message": "Division by zero error"
+        }
+    except SyntaxError:
+        return {
+            "status": "error",
+            "expression": expression,
+            "result": None,
+            "message": "Invalid syntax in expression"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "expression": expression,
+            "result": None,
+            "message": f"Error: {str(e)}"
+        }

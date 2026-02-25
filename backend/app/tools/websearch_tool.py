@@ -4,6 +4,7 @@ import os
 import dotenv
 from app.tools import tool
 from tavily import TavilyClient
+from config.settings import settings
 
 dotenv.load_dotenv()
 
@@ -23,8 +24,8 @@ def websearch(query: str) -> str:
     Returns:
         Search results as a string
     """
-    # Get Tavily API key from environment variable
-    api_key = os.getenv('TAVILY_API_KEY', 'your-api-key-here')
+    # Get Tavily API key from settings
+    api_key = settings.TAVILY_API_KEY
     
     # Initialize Tavily client
     tavily = TavilyClient(api_key=api_key)
@@ -46,10 +47,9 @@ if __name__ == "__main__":
     async def test_websearch():
         # Test the websearch tool directly (bypassing the decorator)
         from tavily import TavilyClient
-        import os
         
-        # Get Tavily API key from environment variable
-        api_key = os.getenv('TAVILY_API_KEY')
+        # Get Tavily API key from settings
+        api_key = settings.TAVILY_API_KEY
         
         # Initialize Tavily client
         tavily = TavilyClient(api_key=api_key)

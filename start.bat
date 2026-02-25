@@ -13,6 +13,27 @@ if not exist "%VENV_DIR%" (
 
 echo 启动自主决策Agent项目...
 
+rem 询问是否启用调试模式
+echo 请选择日志级别:
+echo 1. 普通模式（INFO级别）
+echo 2. 调试模式（DEBUG级别，详细日志）
+
+rem 读取用户输入
+set /p log_level=请输入选项 (1-2): 
+
+rem 设置日志级别环境变量
+if "%log_level%"=="1" (
+    set LOG_LEVEL=info
+) else if "%log_level%"=="2" (
+    set LOG_LEVEL=debug
+) else (
+    echo 无效选项，默认使用普通模式
+    set LOG_LEVEL=info
+)
+
+echo 日志级别: %LOG_LEVEL%
+echo.
+
 rem 显示启动选项
 echo 请选择启动模式:
 echo 1. 启动后端服务（FastAPI）
