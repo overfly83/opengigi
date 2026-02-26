@@ -22,7 +22,11 @@
               <i class="fas fa-question-circle mr-1"></i>
               Help
             </button>
-            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1">
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showHistory = true">
+              <i class="fas fa-history mr-1"></i>
+              History
+            </button>
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showSettings = true">
               <i class="fas fa-cog mr-1"></i>
               Settings
             </button>
@@ -100,7 +104,7 @@
                 :disabled="isRunning || !goal.trim()"
                 @click="startAgent"
               >
-                <i class="fas fa-play mr-1"></i>
+                <i class="fas fa-play mr-1 text-sm"></i>
                 {{ isRunning ? 'Running...' : 'Start Execution' }}
               </button>
             </div>
@@ -124,6 +128,20 @@
               <i class="fas fa-stream mr-2 text-blue-600"></i>
               Execution Process
             </h2>
+            
+            <!-- Progress Bar -->
+            <div v-if="isRunning" class="mb-3">
+              <div class="flex justify-between text-xs mb-1">
+                <span>Progress</span>
+                <span>{{ Math.round(progress) }}%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  class="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" 
+                  :style="{ width: progress + '%' }"
+                ></div>
+              </div>
+            </div>
             
             <div class="process-container overflow-y-auto p-3 bg-gray-50 rounded-lg" ref="processContainer" style="height: calc(100% - 32px); min-height: 400px;">
               <div v-for="(log, index) in processLogs" :key="index" 
@@ -180,6 +198,62 @@
         </div>
       </div>
     </footer>
+
+    <!-- Settings Dialog -->
+    <SettingsDialog 
+      v-model:visible="showSettings"
+      v-model:settings="settings"
+      @update:sidebarWidth="updateSidebarWidth"
+      @save="handleSettingsSave"
+    />
+
+    
+    <!-- History Dialog -->
+    <div v-if="showHistory" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-800">Execution History</h3>
+          <button class="text-gray-400 hover:text-gray-600" @click="showHistory = false">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <div v-if="history.length > 0" class="space-y-4">
+          <div 
+            v-for="(item, index) in history" 
+            :key="index"
+            class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
+          >
+            <div class="flex justify-between items-start mb-2">
+              <h4 class="font-medium text-sm">{{ item.goal }}</h4>
+              <span class="text-xs text-gray-500">{{ item.timestamp }}</span>
+            </div>
+            <div class="text-xs text-gray-600 mb-2">
+              <span class="font-medium">Mode:</span> {{ item.mode === 'streaming' ? 'Streaming' : 'Non-Streaming' }}
+            </div>
+            <div class="text-xs text-gray-600 mb-2">
+              <span class="font-medium">Tasks:</span> {{ item.todos.length }}
+            </div>
+            <div class="text-xs text-gray-600">
+              <span class="font-medium">Status:</span> {{ item.status }}
+            </div>
+            <div class="mt-2">
+              <button 
+                class="text-xs text-blue-600 hover:underline"
+                @click="loadHistoryItem(item)"
+              >
+                Load Details
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else class="text-center py-8 text-gray-500">
+          <i class="fas fa-history text-2xl mb-2"></i>
+          <p class="text-sm">No execution history</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -187,6 +261,7 @@
 import axios from 'axios'
 import TodoList from './components/TodoList.vue'
 import MemoryComponent from './components/MemoryComponent.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
 import { ResultProcessor } from './utils/resultProcessor'
 
@@ -194,7 +269,12 @@ export default {
   name: 'App',
   components: {
     TodoList,
-    MemoryComponent
+    MemoryComponent,
+    SettingsDialog
+  },
+  mounted() {
+    this.loadSettings()
+    this.loadHistory()
   },
   data() {
     return {
@@ -210,7 +290,16 @@ export default {
       startX: 0,
       currentStream: null,
       chunkCacheManager: null,
-      agentStatus: null // Agent 状态
+      agentStatus: null, // Agent 状态
+      showSettings: false,
+      settings: {
+        theme: 'light',
+        fontSize: 'normal',
+        sidebarWidth: 320
+      },
+      progress: 0, // 执行进度
+      showHistory: false, // 显示历史记录对话框
+      history: [] // 执行历史记录
     }
   },
   computed: {
@@ -228,7 +317,8 @@ export default {
       this.isRunning = true
       this.currentStream = null
       this.todos = []
-      this.agentStatus = '初始化中...' // 设置初始状态
+      this.agentStatus = '执行中...' // 设置执行状态
+      this.progress = 0 // 重置进度
       
       if (this.mode === 'streaming') {
         this.startStreamingMode()
@@ -302,6 +392,11 @@ export default {
           const validJsonStr = todoListStr.replace(/'/g, '"')
           const todos = JSON.parse(validJsonStr)
           this.todos = todos
+          // 更新进度
+          if (todos.length > 0) {
+            const completedCount = todos.filter(todo => todo.status === 'completed').length
+            this.progress = (completedCount / todos.length) * 100
+          }
         } catch (error) {
           console.error('Failed to parse todo list:', error)
         }
@@ -343,17 +438,20 @@ export default {
       }
       
       if (lastInProgressIndex !== -1) {
-        const updatedTodos = [...this.todos]
-        updatedTodos[lastInProgressIndex].status = 'completed'
-        
-        if (lastInProgressIndex < updatedTodos.length - 1) {
-          for (let i = lastInProgressIndex + 1; i < updatedTodos.length; i++) {
-            updatedTodos[i].status = 'skipped'
+          const updatedTodos = [...this.todos]
+          updatedTodos[lastInProgressIndex].status = 'completed'
+          
+          if (lastInProgressIndex < updatedTodos.length - 1) {
+            for (let i = lastInProgressIndex + 1; i < updatedTodos.length; i++) {
+              updatedTodos[i].status = 'skipped'
+            }
           }
+          
+          this.todos = updatedTodos
+          // 更新进度
+          const completedCount = updatedTodos.filter(todo => todo.status === 'completed').length
+          this.progress = (completedCount / updatedTodos.length) * 100
         }
-        
-        this.todos = updatedTodos
-      }
     },
 
     startResize(type, event) {
@@ -414,10 +512,12 @@ export default {
           this.updateTodoListOnCompletion()
           this.isRunning = false
           this.agentStatus = null // 清除状态
+          this.saveHistory() // 保存执行历史
         } else {
           this.addLog('error', '执行失败: ' + response.data.message)
           this.isRunning = false
           this.agentStatus = null // 清除状态
+          this.saveHistory() // 保存执行历史
         }
       })
       .catch(error => {
@@ -425,6 +525,7 @@ export default {
         this.addLog('error', '执行失败，请重试')
         this.isRunning = false
         this.agentStatus = null // 清除状态
+        this.saveHistory() // 保存执行历史
       })
     },
 
@@ -478,6 +579,11 @@ export default {
           const validJsonStr = todoListStr.replace(/'/g, '"')
           const todos = JSON.parse(validJsonStr)
           this.todos = todos
+          // 更新进度
+          if (todos.length > 0) {
+            const completedCount = todos.filter(todo => todo.status === 'completed').length
+            this.progress = (completedCount / todos.length) * 100
+          }
         } catch (error) {
           console.error('Failed to parse todo list:', error)
         }
@@ -502,6 +608,86 @@ export default {
       
       const filteredContent = filteredLines.join('\n').trim()
       return filteredContent
+    },
+
+    updateSidebarWidth(width) {
+      this.sidebarWidth = width
+    },
+    handleSettingsSave(settings) {
+      // 处理设置保存事件
+      this.sidebarWidth = settings.sidebarWidth
+    },
+    loadSettings() {
+      // 从本地存储加载设置
+      const savedSettings = localStorage.getItem('appSettings')
+      if (savedSettings) {
+        this.settings = { ...this.settings, ...JSON.parse(savedSettings) }
+        this.sidebarWidth = this.settings.sidebarWidth
+        // 应用主题
+        if (this.settings.theme === 'dark') {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+        // 应用字体大小
+        document.documentElement.classList.remove('text-sm', 'text-base', 'text-lg')
+        switch (this.settings.fontSize) {
+          case 'small':
+            document.documentElement.classList.add('text-sm')
+            break
+          case 'large':
+            document.documentElement.classList.add('text-lg')
+            break
+          default:
+            document.documentElement.classList.add('text-base')
+        }
+      }
+    },
+    saveHistory() {
+      // 保存历史记录到本地存储
+      const historyItem = {
+        id: Date.now(),
+        goal: this.goal,
+        mode: this.mode,
+        todos: [...this.todos],
+        result: this.result,
+        timestamp: new Date().toLocaleString(),
+        status: this.todos.length > 0 ? 
+          this.todos.every(todo => todo.status === 'completed') ? 'Completed' : 'Partial' : 'No Tasks'
+      }
+      
+      // 从本地存储加载现有历史记录
+      const existingHistory = localStorage.getItem('appHistory')
+      let history = existingHistory ? JSON.parse(existingHistory) : []
+      
+      // 添加新的历史记录项
+      history.unshift(historyItem)
+      
+      // 限制历史记录数量为最近10条
+      if (history.length > 10) {
+        history = history.slice(0, 10)
+      }
+      
+      // 保存到本地存储
+      localStorage.setItem('appHistory', JSON.stringify(history))
+      
+      // 更新当前历史记录列表
+      this.history = history
+    },
+    loadHistory() {
+      // 从本地存储加载历史记录
+      const savedHistory = localStorage.getItem('appHistory')
+      if (savedHistory) {
+        this.history = JSON.parse(savedHistory)
+      }
+    },
+    loadHistoryItem(item) {
+      // 加载历史记录项到当前界面
+      this.goal = item.goal
+      this.mode = item.mode
+      this.todos = [...item.todos]
+      this.result = item.result
+      this.showHistory = false
     }
   }
 }
@@ -553,5 +739,220 @@ export default {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+</style>
+
+<style>
+/* 深色模式样式 */
+.dark {
+  background-color: #1a1a2e;
+  color: #e2e8f0;
+}
+
+.dark .card {
+  background-color: #16213e;
+  border-color: #0f3460;
+  color: #e2e8f0;
+}
+
+.dark .bg-gray-50 {
+  background-color: #0f3460;
+  color: #e2e8f0;
+}
+
+.dark .bg-blue-50 {
+  background-color: #1a365d;
+  color: #e2e8f0;
+}
+
+.dark .bg-green-50 {
+  background-color: #22543d;
+  color: #e2e8f0;
+}
+
+.dark .bg-red-50 {
+  background-color: #742a2a;
+  color: #e2e8f0;
+}
+
+.dark .bg-gray-100 {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .border-gray-300 {
+  border-color: #475569;
+}
+
+.dark .text-gray-500 {
+  color: #94a3b8;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1;
+}
+
+.dark .text-gray-800 {
+  color: #f8fafc;
+}
+
+.dark .btn-primary {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.dark .btn-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.dark .btn {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.dark .btn:hover {
+  background-color: #334155;
+  border-color: #64748b;
+}
+
+.dark input[type="text"],
+.dark textarea,
+.dark select {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.dark input[type="text"]:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #334155;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #475569;
+}
+
+.dark .hover\:border-blue-600:hover {
+  border-color: #3b82f6;
+}
+
+/* 深色模式下的设置对话框 */
+.dark .bg-white {
+  background-color: #16213e;
+  color: #e2e8f0;
+}
+
+.dark .text-gray-400 {
+  color: #94a3b8;
+}
+
+.dark .text-gray-400:hover {
+  color: #cbd5e1;
+}
+
+.dark .border-gray-300 {
+  border-color: #475569;
+}
+
+.dark .bg-blue-50 {
+  background-color: #1a365d;
+  border-color: #3b82f6;
+  color: #bfdbfe;
+}
+
+.dark .bg-gray-800 {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .text-blue-600 {
+  color: #3b82f6;
+}
+
+.dark .bg-blue-600 {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.dark .bg-blue-600:hover {
+  background-color: #2563eb;
+}
+
+.dark .text-white {
+  color: #ffffff;
+}
+
+/* 深色模式下的记忆模块 */
+.dark .bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, #1a365d, #1e3a8a);
+}
+
+.dark .border-blue-100 {
+  border-color: #1e40af;
+}
+
+.dark .bg-white {
+  background-color: #1e293b;
+  border-color: #334155;
+}
+
+.dark .text-blue-500 {
+  color: #60a5fa;
+}
+
+.dark .text-purple-500 {
+  color: #a78bfa;
+}
+
+.dark .text-green-500 {
+  color: #34d399;
+}
+
+.dark .text-orange-500 {
+  color: #f97316;
+}
+
+.dark .bg-gray-100 {
+  background-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .bg-gray-100:hover {
+  background-color: #475569;
+}
+
+/* 深色模式下的页眉页脚 */
+.dark .bg-gradient-to-r {
+  background-image: linear-gradient(to right, #16213e, #0f3460);
+}
+
+.dark .text-white {
+  color: #ffffff;
+}
+
+.dark .text-gray-300 {
+  color: #cbd5e1;
+}
+
+.dark .text-gray-300:hover {
+  color: #ffffff;
+}
+
+.dark .border-b {
+  border-color: #334155;
+}
+
+.dark .border-t {
+  border-color: #334155;
 }
 </style>

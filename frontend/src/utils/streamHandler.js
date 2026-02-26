@@ -61,6 +61,9 @@ export class StreamHandler {
         todos: this.app.todos
       }
     }
+
+    // 保存执行历史
+    this.app.saveHistory()
   }
 
   extractFinalResult() {
