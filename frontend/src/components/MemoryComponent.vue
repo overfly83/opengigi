@@ -67,4 +67,7 @@ export default {
 
 <style scoped>
 /* Additional component-specific styles can be added here */
+.memory-component p {
+  line-height: 1.2;
+}
 </style>

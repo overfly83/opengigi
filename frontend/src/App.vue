@@ -18,7 +18,7 @@
               <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse mr-1.5"></div>
               <span class="text-white text-xs">{{ agentStatus }}</span>
             </div>
-            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1">
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showHelp = true">
               <i class="fas fa-question-circle mr-1"></i>
               Help
             </button>
@@ -160,7 +160,7 @@
                   </div>
                 </div>
               </div>
-              <div v-if="processLogs.length === 0" class="text-center text-gray-500 py-6">
+              <div v-if="processLogs.length === 0" class="flex flex-col items-center justify-center h-full text-gray-500">
                 <i class="fas fa-clipboard-list text-xl mb-2"></i>
                 <p class="text-xs">No execution logs</p>
               </div>
@@ -185,7 +185,7 @@
             <p class="text-xs">© 2026 Autonomous Decision Agent - Based on deepagents framework</p>
           </div>
           <div class="flex space-x-3">
-            <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
+            <a href="https://github.com/overfly83/opengigi" target="_blank" rel="noopener noreferrer" class="text-gray-300 hover:text-white transition-colors duration-300">
               <i class="fab fa-github text-sm"></i>
             </a>
             <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
@@ -206,7 +206,9 @@
       @update:sidebarWidth="updateSidebarWidth"
       @save="handleSettingsSave"
     />
-
+    
+    <!-- Help Dialog -->
+    <HelpDialog v-model:visible="showHelp" />
     
     <!-- History Dialog -->
     <div v-if="showHistory" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -262,6 +264,7 @@ import axios from 'axios'
 import TodoList from './components/TodoList.vue'
 import MemoryComponent from './components/MemoryComponent.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+import HelpDialog from './components/HelpDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
 import { ResultProcessor } from './utils/resultProcessor'
 
@@ -270,7 +273,8 @@ export default {
   components: {
     TodoList,
     MemoryComponent,
-    SettingsDialog
+    SettingsDialog,
+    HelpDialog
   },
   mounted() {
     this.loadSettings()
@@ -299,6 +303,7 @@ export default {
       },
       progress: 0, // 执行进度
       showHistory: false, // 显示历史记录对话框
+      showHelp: false, // 显示帮助对话框
       history: [] // 执行历史记录
     }
   },
