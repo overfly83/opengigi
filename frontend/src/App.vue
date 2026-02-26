@@ -1,29 +1,30 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-gray-50">
+  <div class="h-screen flex flex-col bg-gray-50 overflow-hidden">
     <!-- Header -->
-    <header class="bg-gradient-to-r from-primary to-secondary shadow-lg">
-      <div class="container mx-auto px-4 py-6">
+    <header class="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg">
+      <div class="container mx-auto px-4 py-3">
         <div class="flex flex-col md:flex-row justify-between items-center">
-          <div class="text-center md:text-left mb-4 md:mb-0">
-            <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">
-              自主决策Agent
-            </h1>
-            <p class="text-white text-opacity-90">
-              基于deepagents框架的智能助手
-            </p>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div v-if="agentStatus" class="flex items-center bg-white bg-opacity-20 px-3 py-1 rounded-full">
-              <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse mr-2"></div>
-              <span class="text-white text-sm font-medium">{{ agentStatus }}</span>
+          <div class="flex items-center mb-2 md:mb-0">
+            <div class="w-8 h-8 rounded-full bg-white bg-opacity-20 flex items-center justify-center mr-2">
+              <i class="fas fa-robot text-white text-sm"></i>
             </div>
-            <button class="btn bg-white text-primary hover:bg-gray-100">
+            <div>
+              <h1 class="text-lg font-bold text-white">Autonomous Decision Agent</h1>
+              <p class="text-[9px] text-white text-opacity-80">Based on deepagents framework</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <div v-if="agentStatus" class="flex items-center bg-white bg-opacity-20 px-2 py-0.5 rounded-full">
+              <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse mr-1.5"></div>
+              <span class="text-white text-xs">{{ agentStatus }}</span>
+            </div>
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1">
               <i class="fas fa-question-circle mr-1"></i>
-              帮助
+              Help
             </button>
-            <button class="btn bg-white text-primary hover:bg-gray-100">
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1">
               <i class="fas fa-cog mr-1"></i>
-              设置
+              Settings
             </button>
           </div>
         </div>
@@ -31,17 +32,17 @@
     </header>
     
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-6 flex-1 flex flex-col">
-      <div class="flex flex-col lg:flex-row gap-4 flex-1 h-full">
+    <main class="container mx-auto px-4 py-6 flex-1 flex flex-col overflow-hidden">
+      <div class="flex flex-col lg:flex-row gap-4 flex-1 h-full overflow-hidden">
         <!-- Left Sidebar with Resize Handle -->
-        <div class="lg:w-1/4 space-y-4 resizeable-sidebar flex flex-col" ref="sidebarRef" :style="{ width: sidebarWidth + 'px' }">
+        <div class="lg:w-1/4 resizeable-sidebar flex flex-col gap-4 overflow-hidden h-full" ref="sidebarRef" :style="{ width: sidebarWidth + 'px' }">
           <!-- Todo List Component -->
-          <div class="card shadow-lg">
+          <div class="card shadow-lg overflow-auto" style="flex: 0 1 auto; min-height: 120px; max-height: 40%;">
             <TodoList :todos="todos" />
           </div>
           
           <!-- Memory Component -->
-          <div class="card shadow-lg flex-1">
+          <div class="card shadow-lg overflow-auto" style="flex: 1 0 60%; min-height: 400px;">
             <MemoryComponent />
           </div>
           
@@ -50,27 +51,27 @@
         </div>
         
         <!-- Right Content -->
-        <div class="lg:flex-1 space-y-4 flex-1 flex flex-col" :style="{ width: 'calc(100% - ' + (sidebarWidth + 16) + 'px)' }">
+        <div class="lg:flex-1 space-y-4 flex-1 flex flex-col overflow-hidden" :style="{ width: 'calc(100% - ' + (sidebarWidth + 16) + 'px)' }">
           <!-- Input Section -->
           <div class="card shadow-lg">
             <h2 class="text-base font-semibold mb-3 flex items-center">
-              <i class="fas fa-bullseye mr-2 text-primary"></i>
-              设置目标
+              <i class="fas fa-bullseye mr-2 text-blue-600"></i>
+              Set Goal
             </h2>
             
             <textarea 
               v-model="goal" 
-              placeholder="请输入您的目标，例如：为周末制定一个详细的旅行计划，包括景点、交通和住宿"
+              placeholder="Enter your goal, e.g., Create a detailed weekend travel plan including attractions, transportation, and accommodation"
               rows="2"
               :disabled="isRunning"
-              class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-300"
+              class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-300 text-sm"
             ></textarea>
             
             <div class="mt-2 mb-2 flex items-center justify-between">
               <div class="flex space-x-2">
-                <label class="flex items-center justify-center p-2 border border-gray-300 rounded-md cursor-pointer transition-all duration-300 hover:border-primary" 
-                       :class="{ 'border-primary bg-primary bg-opacity-5': mode === 'streaming' }"
-                       title="流式模式 - 实时显示执行过程">
+                <label class="flex items-center justify-center p-2 border border-gray-300 rounded-md cursor-pointer transition-all duration-300 hover:border-blue-600" 
+                       :class="{ 'border-blue-600 bg-blue-50': mode === 'streaming' }"
+                       title="Streaming mode - Display execution process in real-time">
                   <input 
                     type="radio" 
                     v-model="mode" 
@@ -78,11 +79,11 @@
                     :disabled="isRunning"
                     class="hidden"
                   >
-                  <i class="fas fa-water text-lg text-gray-600" :class="{ 'text-primary': mode === 'streaming' }"></i>
+                  <i class="fas fa-water text-sm text-gray-600" :class="{ 'text-blue-600': mode === 'streaming' }"></i>
                 </label>
-                <label class="flex items-center justify-center p-2 border border-gray-300 rounded-md cursor-pointer transition-all duration-300 hover:border-primary" 
-                       :class="{ 'border-primary bg-primary bg-opacity-5': mode === 'non-streaming' }"
-                       title="非流式模式 - 完整显示执行结果">
+                <label class="flex items-center justify-center p-2 border border-gray-300 rounded-md cursor-pointer transition-all duration-300 hover:border-blue-600" 
+                       :class="{ 'border-blue-600 bg-blue-50': mode === 'non-streaming' }"
+                       title="Non-streaming mode - Display complete execution result">
                   <input 
                     type="radio" 
                     v-model="mode" 
@@ -90,7 +91,7 @@
                     :disabled="isRunning"
                     class="hidden"
                   >
-                  <i class="fas fa-bolt text-lg text-gray-600" :class="{ 'text-primary': mode === 'non-streaming' }"></i>
+                  <i class="fas fa-bolt text-sm text-gray-600" :class="{ 'text-blue-600': mode === 'non-streaming' }"></i>
                 </label>
               </div>
               
@@ -100,7 +101,7 @@
                 @click="startAgent"
               >
                 <i class="fas fa-play mr-1"></i>
-                {{ isRunning ? '执行中...' : '开始执行' }}
+                {{ isRunning ? 'Running...' : 'Start Execution' }}
               </button>
             </div>
           </div>
@@ -108,8 +109,8 @@
           <!-- Result Section -->
           <div class="card shadow-lg" v-if="result">
             <h2 class="text-base font-semibold mb-3 flex items-center">
-              <i class="fas fa-flag-checkered mr-2 text-primary"></i>
-              执行结果
+              <i class="fas fa-flag-checkered mr-2 text-blue-600"></i>
+              Execution Result
             </h2>
             
             <div class="p-3 bg-gray-50 rounded-lg">
@@ -118,13 +119,13 @@
           </div>
 
           <!-- Process Section -->
-          <div class="card shadow-lg flex-1 flex flex-col min-h-0" style="min-height: 600px;">
+          <div class="card shadow-lg flex-1 flex flex-col min-h-0">
             <h2 class="text-base font-semibold mb-3 flex items-center">
-              <i class="fas fa-stream mr-2 text-primary"></i>
-              执行过程
+              <i class="fas fa-stream mr-2 text-blue-600"></i>
+              Execution Process
             </h2>
             
-            <div class="process-container overflow-y-auto p-3 bg-gray-50 rounded-lg" ref="processContainer" style="height: calc(100% - 32px);">
+            <div class="process-container overflow-y-auto p-3 bg-gray-50 rounded-lg" ref="processContainer" style="height: calc(100% - 32px); min-height: 400px;">
               <div v-for="(log, index) in processLogs" :key="index" 
                    :class="['p-2 mb-1 rounded-lg', log.type === 'info' ? 'bg-blue-50' : 
                            log.type === 'success' ? 'bg-green-50' : 
@@ -137,13 +138,13 @@
                   <i class="fas fa-play-circle mt-1 mr-2 text-gray-500" v-else-if="log.type === 'streaming' "></i>
                   <div class="flex-1">
                     <div class="text-xs text-gray-500 mb-1">{{ log.timestamp }}</div>
-                    <div class="text-sm whitespace-pre-wrap">{{ log.content }}</div>
+                    <div class="text-xs whitespace-pre-wrap">{{ log.content }}</div>
                   </div>
                 </div>
               </div>
               <div v-if="processLogs.length === 0" class="text-center text-gray-500 py-6">
-                <i class="fas fa-clipboard-list text-3xl mb-2"></i>
-                <p class="text-sm">暂无执行日志</p>
+                <i class="fas fa-clipboard-list text-xl mb-2"></i>
+                <p class="text-xs">No execution logs</p>
               </div>
               <div v-if="isRunning" class="flex justify-center items-center py-3">
                 <div class="flex items-center space-x-2">
@@ -159,21 +160,21 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-4 mt-4">
+    <footer class="bg-gradient-to-r from-blue-800 to-indigo-900 text-white py-3 mt-4">
       <div class="container mx-auto px-4">
         <div class="flex flex-col md:flex-row justify-between items-center">
           <div class="text-center md:text-left mb-2 md:mb-0">
-            <p class="text-xs">© 2026 自主决策Agent - 基于deepagents框架</p>
+            <p class="text-xs">© 2026 Autonomous Decision Agent - Based on deepagents framework</p>
           </div>
           <div class="flex space-x-3">
             <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
-              <i class="fab fa-github text-lg"></i>
+              <i class="fab fa-github text-sm"></i>
             </a>
             <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
-              <i class="fab fa-twitter text-lg"></i>
+              <i class="fab fa-twitter text-sm"></i>
             </a>
             <a href="#" class="text-gray-300 hover:text-white transition-colors duration-300">
-              <i class="fab fa-linkedin text-lg"></i>
+              <i class="fab fa-linkedin text-sm"></i>
             </a>
           </div>
         </div>
