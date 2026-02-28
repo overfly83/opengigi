@@ -33,6 +33,11 @@ class Settings:
         
         # Other API keys
         self.TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+        self.SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
+        self.SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+        
+        # Search provider settings
+        self.SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "tavily")
     
     def _load_model_config(self) -> Dict[str, Any]:
         """Load model configuration from YAML file

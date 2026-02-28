@@ -3,7 +3,6 @@ import sys
 import os
 import dotenv
 from app.tools import tool
-from tavily import TavilyClient
 from config.settings import settings
 
 dotenv.load_dotenv()
@@ -12,11 +11,34 @@ dotenv.load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 
+class SearchEngineFactory:
+    """搜索引擎工厂类"""
+    
+    @staticmethod
+    def create_search_engine() -> object:
+        """根据配置创建搜索引擎实例
+        
+        Returns:
+            搜索引擎实例
+        """
+        provider = settings.SEARCH_PROVIDER.lower()
+        
+        if provider == "tavily":
+            from app.tools.search.tavily_search import TavilySearch
+            return TavilySearch()
+        elif provider == "serpapi":
+            from app.tools.search.serpapi_search import SerpAPISearch
+            return SerpAPISearch()
+        elif provider == "serper":
+            from app.tools.search.serper_search import SerperSearch
+            return SerperSearch()
+        else:
+            raise ValueError(f"Unsupported search provider: {provider}")
 
 
 @tool
 def websearch(query: str) -> str:
-    """Search the web for information using Tavily.
+    """Search the web for information using the configured search provider.
     
     Args:
         query: The search query string
@@ -24,21 +46,11 @@ def websearch(query: str) -> str:
     Returns:
         Search results as a string
     """
-    # Get Tavily API key from settings
-    api_key = settings.TAVILY_API_KEY
+    # 创建搜索引擎实例
+    search_engine = SearchEngineFactory.create_search_engine()
     
-    # Initialize Tavily client
-    tavily = TavilyClient(api_key=api_key)
-    
-    # Search and get results
-    results = tavily.search(query=query, search_depth='basic', topic='general')
-    
-    # Format results
-    formatted_results = []
-    for i, result in enumerate(results['results'][:3], 1):
-        formatted_results.append(f"{i}. {result['title']}\n{result['url']}\n{result['content'][:200]}...\n")
-    
-    return "\n".join(formatted_results)
+    # 执行搜索并返回结果
+    return search_engine.search(query)
 
 
 if __name__ == "__main__":
@@ -46,22 +58,11 @@ if __name__ == "__main__":
     
     async def test_websearch():
         # Test the websearch tool directly (bypassing the decorator)
-        from tavily import TavilyClient
-        
-        # Get Tavily API key from settings
-        api_key = settings.TAVILY_API_KEY
-        
-        # Initialize Tavily client
-        tavily = TavilyClient(api_key=api_key)
+        search_engine = SearchEngineFactory.create_search_engine()
         
         # Search and get results
-        results = tavily.search(query="What is the capital of France?", search_depth='basic', topic='general')
+        results = search_engine.search("What is the capital of France?")
         
-        # Format results
-        formatted_results = []
-        for i, result in enumerate(results['results'][:3], 1):
-            formatted_results.append(f"{i}. {result['title']}\n{result['url']}\n{result['content'][:200]}...\n")
-        
-        print("\n".join(formatted_results))
+        print(results)
     
     asyncio.run(test_websearch())
