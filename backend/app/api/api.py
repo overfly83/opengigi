@@ -55,34 +55,64 @@ def ensure_serializable(obj):
     elif isinstance(obj, (str, int, float, bool)):
         return obj
     elif isinstance(obj, list):
-        return [ensure_serializable(item) for item in obj]
+        # 处理列表
+        try:
+            return [ensure_serializable(item) for item in obj]
+        except Exception as e:
+            # 处理任何异常，将对象转换为字符串
+            return str(obj)
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, dict)):
+        # 处理其他可迭代对象（除了字符串和字典）
+        try:
+            return [ensure_serializable(item) for item in obj]
+        except Exception as e:
+            # 处理任何异常，将对象转换为字符串
+            return str(obj)
     elif isinstance(obj, dict):
-        return {key: ensure_serializable(value) for key, value in obj.items()}
+        # 处理字典
+        try:
+            # 检查字典是否有items方法
+            if hasattr(obj, 'items'):
+                return {key: ensure_serializable(value) for key, value in obj.items()}
+            else:
+                # 如果字典没有items方法，将其转换为字符串
+                return str(obj)
+        except Exception as e:
+            # 处理任何异常，将对象转换为字符串
+            return str(obj)
     elif hasattr(obj, '__dict__'):
         # 如果是对象，转换为字典
-        result_dict = {}
-        for key, value in obj.__dict__.items():
-            if not key.startswith('_'):
-                # 只包含非私有属性
-                result_dict[key] = ensure_serializable(value)
-        return result_dict
+        try:
+            # 检查__dict__是否存在且是字典
+            if hasattr(obj, '__dict__'):
+                # 直接将对象转换为字符串，避免处理__dict__的复杂性
+                return str(obj)
+            else:
+                return str(obj)
+        except Exception as e:
+            # 处理任何异常，将对象转换为字符串
+            return str(obj)
     elif hasattr(obj, 'content'):
         # 处理LangChain的消息对象
-        return {
-            'type': obj.type if hasattr(obj, 'type') else 'unknown',
-            'content': obj.content if hasattr(obj, 'content') else str(obj),
-            'name': obj.name if hasattr(obj, 'name') else None
-        }
+        try:
+            return {
+                'type': obj.type if hasattr(obj, 'type') else 'unknown',
+                'content': obj.content if hasattr(obj, 'content') else str(obj),
+                'name': obj.name if hasattr(obj, 'name') else None
+            }
+        except Exception as e:
+            # 处理任何异常，将对象转换为字符串
+            return str(obj)
     else:
         # 如果是其他不可序列化类型，转换为字符串
         return str(obj)
 
 # 真正的流式输出生成器
-async def generate_streaming_output(goal: str, stream_mode: str = "updates"):
+async def generate_streaming_output(goal: str, stream_mode: str = "updates", session_id: str = None, user_id: str = "user1"):
     """生成流式输出"""
     try:
         # 直接使用agent的异步run方法，实时获取结果
-        async for result in agent.run_async(goal, stream_mode=stream_mode):
+        async for result in agent.run_async(goal, stream_mode=stream_mode, session_id=session_id, user_id=user_id):
             # 确保result可以被JSON序列化
             result = ensure_serializable(result)
             # 流式输出每个步骤
@@ -98,11 +128,11 @@ async def generate_streaming_output(goal: str, stream_mode: str = "updates"):
         raise
 
 @app.post("/run-agent")
-async def run_agent(request: AgentRequest):
+async def run_agent(request: AgentRequest, session_id: str = None, user_id: str = "user1"):
     """运行Agent（非流式模式）"""
     try:
         # 执行Agent
-        state = agent.run(request.goal)
+        state = agent.run(request.goal, session_id=session_id, user_id=user_id)
         
         return {
             "success": True,
@@ -112,11 +142,11 @@ async def run_agent(request: AgentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/run-agent-stream")
-async def run_agent_stream(goal: str, stream_mode: str = "updates"):
+async def run_agent_stream(goal: str, stream_mode: str = "updates", session_id: str = None, user_id: str = "user1"):
     """运行Agent（流式模式）"""
     try:
         return StreamingResponse(
-            generate_streaming_output(goal, stream_mode=stream_mode),
+            generate_streaming_output(goal, stream_mode=stream_mode, session_id=session_id, user_id=user_id),
             media_type="text/event-stream"
         )
     except Exception as e:

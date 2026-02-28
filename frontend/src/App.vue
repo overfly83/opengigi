@@ -18,6 +18,17 @@
               <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse mr-1.5"></div>
               <span class="text-white text-xs">{{ agentStatus }}</span>
             </div>
+            <div class="flex items-center bg-white bg-opacity-20 px-2 py-0.5 rounded-full relative" :title="'Session UUID: ' + sessionUuid">
+              <span class="text-white text-xs truncate max-w-[120px]">Session: {{ sessionUuid.slice(0, 8) }}...</span>
+            </div>
+            <div class="flex items-center bg-white bg-opacity-20 px-2 py-0.5 rounded-full">
+              <span class="text-white text-xs">User: </span>
+              <input 
+                v-model="userId" 
+                class="bg-transparent border-none text-white text-xs focus:outline-none w-20" 
+                placeholder="user1"
+              >
+            </div>
             <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showHelp = true">
               <i class="fas fa-question-circle mr-1"></i>
               Help
@@ -71,7 +82,7 @@
               class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-300 text-sm"
             ></textarea>
             
-            <div class="mt-2 mb-2 flex items-center justify-between">
+            <div class="mt-2 mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div class="flex space-x-2">
                 <label class="flex items-center justify-center p-2 border border-gray-300 rounded-md cursor-pointer transition-all duration-300 hover:border-blue-600" 
                        :class="{ 'border-blue-600 bg-blue-50': mode === 'streaming' }"
@@ -99,14 +110,16 @@
                 </label>
               </div>
               
-              <button 
-                class="btn btn-primary py-2 px-4 text-sm font-medium"
-                :disabled="isRunning || !goal.trim()"
-                @click="startAgent"
-              >
-                <i class="fas fa-play mr-1 text-sm"></i>
-                {{ isRunning ? 'Running...' : 'Start Execution' }}
-              </button>
+              <div class="flex items-center space-x-2 flex-1 sm:flex-none">
+          <button 
+            class="btn btn-primary py-2 px-4 text-sm font-medium"
+            :disabled="isRunning || !goal.trim()"
+            @click="startAgent"
+          >
+            <i class="fas fa-play mr-1 text-sm"></i>
+            {{ isRunning ? 'Running...' : 'Start Execution' }}
+          </button>
+        </div>
             </div>
           </div>
 
@@ -277,6 +290,9 @@ export default {
     HelpDialog
   },
   mounted() {
+    // 生成sessionUuid
+    this.sessionUuid = this.generateUuid()
+    // 加载设置和历史记录
     this.loadSettings()
     this.loadHistory()
   },
@@ -284,6 +300,8 @@ export default {
     return {
       goal: '',
       mode: 'streaming',
+      sessionUuid: '',
+      userId: 'user1',
       isRunning: false,
       processLogs: [],
       result: null,
@@ -508,6 +526,11 @@ export default {
       axios.post('http://localhost:8000/run-agent', {
         goal: this.goal,
         mode: 'non-streaming'
+      }, {
+        params: {
+          session_id: this.sessionUuid,
+          user_id: this.userId
+        }
       })
       .then(response => {
         if (response.data.success) {
@@ -693,6 +716,14 @@ export default {
       this.todos = [...item.todos]
       this.result = item.result
       this.showHistory = false
+    },
+    generateUuid() {
+      // 生成唯一的UUID
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0
+        const v = c === 'x' ? r : (r & 0x3 | 0x8)
+        return v.toString(16)
+      })
     }
   }
 }

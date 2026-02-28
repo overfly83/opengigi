@@ -14,7 +14,14 @@ export class StreamHandler {
     this.app.addLog('info', `目标: ${this.app.goal}`)
     this.app.agentStatus = '执行中...' // 设置执行状态
 
-    this.eventSource = new EventSource(`http://localhost:8000/run-agent-stream?goal=${encodeURIComponent(this.app.goal)}&stream_mode=messages`)
+    let url = `http://localhost:8000/run-agent-stream?goal=${encodeURIComponent(this.app.goal)}&stream_mode=messages`
+    if (this.app.sessionUuid) {
+      url += `&session_id=${encodeURIComponent(this.app.sessionUuid)}`
+    }
+    if (this.app.userId) {
+      url += `&user_id=${encodeURIComponent(this.app.userId)}`
+    }
+    this.eventSource = new EventSource(url)
 
     this.eventSource.onmessage = (event) => {
       if (event.data === '[DONE]') {
