@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List, Callable
+from typing import Any, Dict, Callable
 from datetime import datetime
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain.agents.middleware import AgentState
@@ -69,9 +69,11 @@ class MemoryMiddleware(AgentMiddleware):
                 'timestamp': datetime.now().isoformat()
             }
         elif isinstance(message, AIMessage):
+            # Use message.content instead of content_blocks to avoid [object Object] in frontend
+            content = message.content if hasattr(message, 'content') else str(message.content_blocks)
             return {
                 'type': 'ai',
-                'content': message.content,
+                'content': content,
                 'timestamp': datetime.now().isoformat()
             }
         elif isinstance(message, ToolMessage):

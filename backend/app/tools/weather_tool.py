@@ -23,15 +23,15 @@ def _get_current_weather(city: str) -> Dict[str, Any]:
     Returns:
         Weather data dictionary
     """
-    if not settings.WEATHERAPI_API_KEY:
+    if not settings.WEATHER_API_KEY:
         return {
             "status": "error",
-            "message": "WEATHERAPI_API_KEY not configured. Please set it in your .env file."
+            "message": "WEATHER_API_KEY not configured. Please set it in your .env file."
         }
     
     base_url = "http://api.weatherapi.com/v1/current.json"
     params = {
-        "key": settings.WEATHERAPI_API_KEY,
+        "key": settings.WEATHER_API_KEY,
         "q": city,
         "aqi": "yes"
     }
@@ -119,17 +119,17 @@ def _get_weather_forecast(city: str, days: int = 3) -> Dict[str, Any]:
     Returns:
         Forecast data dictionary
     """
-    if not settings.WEATHERAPI_API_KEY:
+    if not settings.WEATHER_API_KEY:
         return {
             "status": "error",
-            "message": "WEATHERAPI_API_KEY not configured. Please set it in your .env file."
+            "message": "WEATHER_API_KEY not configured. Please set it in your .env file."
         }
     
     days = max(1, min(14, days))
     
     base_url = "http://api.weatherapi.com/v1/forecast.json"
     params = {
-        "key": settings.WEATHERAPI_API_KEY,
+        "key": settings.WEATHER_API_KEY,
         "q": city,
         "days": days,
         "aqi": "yes",

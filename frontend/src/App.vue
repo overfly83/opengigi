@@ -776,7 +776,12 @@ export default {
           content = `User: ${msg.content}`
         } else if (msg.type === 'ai') {
           type = 'success'
-          content = `AI: ${msg.content || '(empty response)'}`
+          // 确保 content 是字符串
+          let aiContent = msg.content
+          if (typeof aiContent === 'object' && aiContent !== null) {
+            aiContent = JSON.stringify(aiContent)
+          }
+          content = `AI: ${aiContent || '(empty response)'}`
         } else if (msg.type === 'tool') {
           type = 'streaming'
           content = `Tool [${msg.tool_name}]: ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '...' : ''}`

@@ -35,7 +35,7 @@ class Settings:
         self.TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
         self.SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
         self.SERPER_API_KEY = os.getenv("SERPER_API_KEY")
-        self.WEATHERAPI_API_KEY = os.getenv("WEATHERAPI_API_KEY")
+        self.WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
         
         # Search provider settings
         self.SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "tavily")
