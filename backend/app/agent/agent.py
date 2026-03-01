@@ -13,7 +13,7 @@ from app.middleware.memory_middleware import MemoryMiddleware
 from app.skills import skill_registry
 from app.tools.registry import ToolRegistry
 from app.utils.logger import get_logger
-from config.settings import settings
+from app.config.settings import settings
 from app.agent import storage
 from app.agent import stream_processor
 

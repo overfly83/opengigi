@@ -3,7 +3,7 @@ import sys
 import os
 import dotenv
 from app.tools import tool
-from config.settings import settings
+from app.config.settings import settings
 
 dotenv.load_dotenv()
 
