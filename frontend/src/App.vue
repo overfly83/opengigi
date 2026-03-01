@@ -58,7 +58,21 @@
           
           <!-- Memory Component -->
           <div class="card shadow-lg overflow-auto" style="flex: 1 0 60%; min-height: 400px;">
-            <MemoryComponent />
+            <MemoryComponent 
+            :userId="userId" 
+            :currentSessionUuid="sessionUuid"
+            @load-thread="handleLoadThread"
+            @thread-deleted="handleThreadDeleted"
+          />
+            <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <button 
+                @click="startNewConversation"
+                class="w-full btn bg-blue-600 text-white hover:bg-blue-700 text-xs py-2 flex items-center justify-center"
+              >
+                <i class="fas fa-plus mr-1"></i>
+                New Conversation
+              </button>
+            </div>
           </div>
           
           <!-- Resize Handle -->
@@ -724,6 +738,66 @@ export default {
         const v = c === 'x' ? r : (r & 0x3 | 0x8)
         return v.toString(16)
       })
+    },
+    
+    startNewConversation() {
+      // 开始新对话
+      this.sessionUuid = this.generateUuid()
+      this.goal = ''
+      this.processLogs = []
+      this.result = null
+      this.todos = []
+      this.agentStatus = null
+      this.progress = 0
+    },
+    
+    handleLoadThread(thread) {
+      // 加载历史对话
+      this.sessionUuid = thread.thread_id
+      
+      // 清空当前状态
+      this.goal = ''
+      this.processLogs = []
+      this.result = null
+      this.todos = []
+      this.agentStatus = null
+      this.progress = 0
+      
+      // 显示历史对话消息
+      this.addLog('info', `Loaded conversation from ${thread.date}`)
+      
+      // 添加历史消息到 processLogs
+      thread.messages.forEach(msg => {
+        let type = 'info'
+        let content = ''
+        
+        if (msg.type === 'human') {
+          type = 'info'
+          content = `User: ${msg.content}`
+        } else if (msg.type === 'ai') {
+          type = 'success'
+          content = `AI: ${msg.content || '(empty response)'}`
+        } else if (msg.type === 'tool') {
+          type = 'streaming'
+          content = `Tool [${msg.tool_name}]: ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '...' : ''}`
+        }
+        
+        if (content) {
+          const timestamp = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
+          this.processLogs.push({ type, content, timestamp })
+        }
+      })
+      
+      this.$nextTick(() => {
+        this.scrollToBottom()
+      })
+    },
+    
+    handleThreadDeleted(deletedThreadId) {
+      // If the deleted thread was the active one, start a new conversation
+      if (deletedThreadId === this.sessionUuid) {
+        this.startNewConversation()
+      }
     }
   }
 }

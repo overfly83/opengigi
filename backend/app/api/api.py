@@ -152,6 +152,78 @@ async def run_agent_stream(goal: str, stream_mode: str = "updates", session_id: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/history/{user_id}")
+async def get_conversation_history(user_id: str):
+    """Get all conversation history for a user.
+    
+    Args:
+        user_id: The user ID
+        
+    Returns:
+        List of conversation threads
+    """
+    try:
+        history = agent.get_conversation_history(user_id)
+        return {
+            "success": True,
+            "data": history
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/history/{user_id}/{thread_id}")
+async def get_thread_history(user_id: str, thread_id: str):
+    """Get a specific conversation thread for a user.
+    
+    Args:
+        user_id: The user ID
+        thread_id: The thread ID
+        
+    Returns:
+        Thread data
+    """
+    try:
+        thread = agent.get_thread_history(user_id, thread_id)
+        if thread:
+            return {
+                "success": True,
+                "data": thread
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Thread not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/history/{user_id}/{thread_id}")
+async def delete_thread(user_id: str, thread_id: str):
+    """Delete a specific conversation thread for a user.
+    
+    Args:
+        user_id: The user ID
+        thread_id: The thread ID to delete
+        
+    Returns:
+        Success message
+    """
+    try:
+        success = agent.delete_thread(user_id, thread_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Thread deleted successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Thread not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/")
 async def root():
     """根路径"""
@@ -159,7 +231,9 @@ async def root():
         "message": "自主决策Agent API",
         "endpoints": {
             "/run-agent": "运行Agent（非流式模式）",
-            "/run-agent-stream": "运行Agent（流式模式）"
+            "/run-agent-stream": "运行Agent（流式模式）",
+            "/history/{user_id}": "获取用户的历史对话列表",
+            "/history/{user_id}/{thread_id}": "获取特定对话线程的详细内容"
         }
     }
 

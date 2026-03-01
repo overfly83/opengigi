@@ -294,3 +294,105 @@ class AutonomousAgent:
         # 直接调用run_async方法
         async for result in self.run_async(goal):
             yield result
+    
+    def get_conversation_history(self, user_id: str) -> list:
+        """Get all conversation threads for a user.
+        
+        Args:
+            user_id: The user ID to get history for
+            
+        Returns:
+            List of conversation threads
+        """
+        try:
+            # Commit any pending transaction
+            try:
+                self.sqlite_store.conn.commit()
+            except Exception:
+                pass
+            
+            stored_data = self.sqlite_store.get(
+                namespace=('memories', 'conversations'),
+                key=user_id
+            )
+            
+            if stored_data:
+                return stored_data.value.get('threads', [])
+            return []
+        except Exception as e:
+            logger.error(f"Error getting conversation history: {e}", exc_info=True)
+            return []
+    
+    def get_thread_history(self, user_id: str, thread_id: str) -> dict | None:
+        """Get a specific conversation thread for a user.
+        
+        Args:
+            user_id: The user ID
+            thread_id: The thread ID to get
+            
+        Returns:
+            Thread data or None if not found
+        """
+        try:
+            # Commit any pending transaction
+            try:
+                self.sqlite_store.conn.commit()
+            except Exception:
+                pass
+            
+            stored_data = self.sqlite_store.get(
+                namespace=('memories', 'conversations'),
+                key=user_id
+            )
+            
+            if stored_data:
+                threads = stored_data.value.get('threads', [])
+                for thread in threads:
+                    if thread.get('thread_id') == thread_id:
+                        return thread
+            return None
+        except Exception as e:
+            logger.error(f"Error getting thread history: {e}", exc_info=True)
+            return None
+    
+    def delete_thread(self, user_id: str, thread_id: str) -> bool:
+        """Delete a specific conversation thread for a user.
+        
+        Args:
+            user_id: The user ID
+            thread_id: The thread ID to delete
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        try:
+            # Commit any pending transaction
+            try:
+                self.sqlite_store.conn.commit()
+            except Exception:
+                pass
+            
+            stored_data = self.sqlite_store.get(
+                namespace=('memories', 'conversations'),
+                key=user_id
+            )
+            
+            if stored_data:
+                threads = stored_data.value.get('threads', [])
+                # Filter out the thread to delete
+                new_threads = [t for t in threads if t.get('thread_id') != thread_id]
+                
+                if len(new_threads) != len(threads):
+                    stored_data.value['threads'] = new_threads
+                    self.sqlite_store.put(
+                        namespace=('memories', 'conversations'),
+                        key=user_id,
+                        value=stored_data.value
+                    )
+                    self.sqlite_store.conn.commit()
+                    return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Error deleting thread: {e}", exc_info=True)
+            return False
