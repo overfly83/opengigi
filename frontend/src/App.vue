@@ -9,7 +9,7 @@
               <i class="fas fa-robot text-white text-sm"></i>
             </div>
             <div>
-              <h1 class="text-lg font-bold text-white">Autonomous Decision Agent</h1>
+              <h1 class="text-lg font-bold text-white">GiGi</h1>
               <p class="text-[9px] text-white text-opacity-80">Based on deepagents framework</p>
             </div>
           </div>
