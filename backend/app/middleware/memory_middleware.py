@@ -70,7 +70,7 @@ class MemoryMiddleware(AgentMiddleware):
             }
         elif isinstance(message, AIMessage):
             # Use message.content instead of content_blocks to avoid [object Object] in frontend
-            content = message.content if hasattr(message, 'content') else str(message.content_blocks)
+            content = message.content if hasattr(message, 'content') and message.content else str(message.content_blocks)
             return {
                 'type': 'ai',
                 'content': content,
