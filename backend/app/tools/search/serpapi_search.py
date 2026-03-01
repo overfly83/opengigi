@@ -1,5 +1,5 @@
 from app.tools.search.search_base import SearchEngine
-from config.settings import settings
+from app.config.settings import settings
 
 
 class SerpAPISearch(SearchEngine):

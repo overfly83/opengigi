@@ -1,6 +1,6 @@
 from app.tools.search.search_base import SearchEngine
 from tavily import TavilyClient
-from config.settings import settings
+from app.config.settings import settings
 
 
 class TavilySearch(SearchEngine):
