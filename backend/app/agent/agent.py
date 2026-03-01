@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class Context:
     user_id: str
+    thread_id: str
 
 class AutonomousAgent:
     def __init__(self):
@@ -172,8 +173,8 @@ class AutonomousAgent:
         thread_id = session_id if session_id else str(uuid.uuid4())
         return self.agent.invoke(
             {"messages": [{"role": "user", "content": goal}]},
-            config={"configurable": {"thread_id": thread_id}},
-            context={"user_id": user_id}
+            config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
+            context={"user_id": user_id, "thread_id": thread_id}
         )
     
     async def run_async(self, goal: str, stream_mode: str = "updates", subgraphs: bool = True, session_id: str = None, user_id: str = "user1"):
@@ -190,7 +191,7 @@ class AutonomousAgent:
                 stream_mode=stream_mode,
                 subgraphs=subgraphs,
                 config={"configurable": {"thread_id": thread_id}},
-                context={"user_id": user_id}
+                context={"user_id": user_id, "thread_id": thread_id}
             )
             
             for namespace, chunk in stream_result:
