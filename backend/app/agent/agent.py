@@ -143,7 +143,7 @@ class AutonomousAgent:
                 {"messages": [{"role": "user", "content": goal}]},
                 stream_mode=stream_mode,
                 subgraphs=subgraphs,
-                config={"configurable": {"thread_id": thread_id}},
+                config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
                 context={"user_id": user_id, "thread_id": thread_id}
             )
 
