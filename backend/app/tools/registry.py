@@ -20,7 +20,7 @@ class ToolRegistry:
         self.tools: Dict[str, Callable] = {}
         self.logger = get_logger(__name__)
 
-    def register_tool(self, tool_func) -> None:
+    def register_tool(self, tool_func, is_mcp: bool = False) -> None:
         """Register a new LangChain tool"""
         if hasattr(tool_func, 'name'):
             tool_name = tool_func.name
@@ -31,35 +31,35 @@ class ToolRegistry:
         
         if tool_name in self.tools:
             raise ValueError(f"Tool {tool_name} already registered")
-        self.tools[tool_name] = tool_func
+        self.tools[tool_name] = {"func": tool_func, "is_mcp": is_mcp}
     
     def get_tool(self, name: str) -> Callable:
         """Get a registered tool by name"""
         if name not in self.tools:
             self.logger.error(f"Tool {name} not found")
-        return self.tools[name]
+        return self.tools[name]["func"]
     
     def list_tools(self) -> List[Dict[str, str]]:
         """List all registered tools"""
         return [
-            {"name": name, "description": getattr(tool, 'description', '')}
-            for name, tool in self.tools.items()
+            tool["func"]
+            for tool in self.tools.values()
         ]
     
     def list_mcp_tools(self) -> List[Dict[str, str]]:
         """List all registered MCP tools"""
         return [
-            {"name": name, "description": getattr(tool, 'description', '')}
-            for name, tool in self.tools.items()
-            if getattr(tool, 'is_mcp', False)
+            tool["func"]
+            for tool in self.tools.values()
+            if tool["is_mcp"]
         ]
     
     def list_regular_tools(self) -> List[Dict[str, str]]:
         """List all registered regular tools"""
         return [
-            {"name": name, "description": getattr(tool, 'description', '')}
-            for name, tool in self.tools.items()
-            if not getattr(tool, 'is_mcp', False)
+            tool["func"]
+            for tool in self.tools.values()
+            if not tool["is_mcp"]
         ]
     
     def list_tools_with_type(self) -> List[Dict[str, str]]:
@@ -67,8 +67,8 @@ class ToolRegistry:
         return [
             {
                 "name": name, 
-                "description": getattr(tool, 'description', ''),
-                "type": "mcp" if getattr(tool, 'is_mcp', False) else "regular"
+                "description": getattr(tool["func"], 'description', ''),
+                "type": "mcp" if tool["is_mcp"] else "regular"
             }
             for name, tool in self.tools.items()
         ]
@@ -103,27 +103,28 @@ class ToolRegistry:
                             continue
                 except Exception as e:
                     self.logger.error(f"Failed to load tool module {module_name}: {e}")
-        self.logger.info(f"Registered regular tools: {[tool.name for tool in self.tools.values()]}")
+        self.logger.info(f"Registered regular tools: {[tool['func'].name for tool in self.tools.values() if not tool['is_mcp']]}")
 
     
     async def load_mcp_tools(self) -> None:
         """Load MCP tools from the mcp_tools module"""
         try:
-            from app.tools.mcp_tools import mcp_client
-
+            from app.tools.mcp_tools import initialize_mcp_client
+            from langchain_mcp_adapters.tools import load_mcp_tools
             # Create MCP tool instances
+            mcp_client = initialize_mcp_client()
+            # async with mcp_client.session('playwright') as session:
+            #     mcp_tools = await load_mcp_tools(session)
+                # mcp_tools = await mcp_client.get_tools()
             mcp_tools = await mcp_client.get_tools()
-
             # Register MCP tools
             for mcp_tool in mcp_tools:
                 try:
-                    # Mark as MCP tool
-                    setattr(mcp_tool, 'is_mcp', True)
-                    self.register_tool(mcp_tool)
+                    self.register_tool(mcp_tool, is_mcp=True)
                 except Exception as e:
                     self.logger.error(f"Failed to register MCP tool {getattr(mcp_tool, 'name', 'unknown')}: {e}")
         except Exception as e:
             self.logger.error(f"Failed to load MCP tools: {e}")
         # Filter and list only MCP tools
-        mcp_tool_names = [tool.name for tool in self.tools.values() if getattr(tool, 'is_mcp', False)]
+        mcp_tool_names = [tool["func"].name for tool in self.tools.values() if tool['is_mcp']]
         self.logger.info(f"Registered MCP tools: {mcp_tool_names}")

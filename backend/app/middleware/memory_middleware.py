@@ -5,7 +5,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain.agents.middleware import AgentState
 from langgraph.runtime import Runtime
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.store.sqlite import SqliteStore
+from langgraph.store.sqlite import AsyncSqliteStore
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,12 +14,12 @@ logger = get_logger(__name__)
 class MemoryMiddleware(AgentMiddleware):
     """Middleware that automatically saves conversation history to memory."""
     
-    def __init__(self, sqlite_store: SqliteStore):
+    def __init__(self, sqlite_store: AsyncSqliteStore):
         super().__init__()
         self.sqlite_store = sqlite_store
         self.current_user_id = 'user1'
         self.current_thread_id = ''
-        logger.info("MemoryMiddleware initialized with SqliteStore")
+        logger.info("MemoryMiddleware initialized with AsyncSqliteStore")
     
     def _capture_config(self, obj: Any, source: str = "unknown"):
         """Try to capture user_id and thread_id from runtime.context only."""
@@ -45,6 +45,13 @@ class MemoryMiddleware(AgentMiddleware):
         """Wrap model call to capture user_id and thread_id from request."""
         # Execute the model call
         return handler(request)
+
+    async def awrap_model_call(
+        self, request: Any, handler: Callable[[Any], Any]
+    ) -> Any:
+        """Wrap model call to capture user_id and thread_id from request (async)."""
+        # Execute the model call
+        return await handler(request)
     
     def wrap_tool_call(
         self, request: Any, handler: Callable[[Any], Any]
@@ -52,12 +59,26 @@ class MemoryMiddleware(AgentMiddleware):
         """Wrap tool call to capture user_id and thread_id from request."""
         # Execute the tool call
         return handler(request)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Any]
+    ) -> Any:
+        """Wrap tool call to capture user_id and thread_id from request (async)."""
+        # Execute the tool call
+        return await handler(request)
     
     def before_model(
         self, state: Any, runtime: Runtime
     ) -> Any | None:
         """Before model execution - capture config from runtime."""
         self._capture_config(runtime, "before_model")
+        return None
+
+    async def abefore_model(
+        self, state: Any, runtime: Runtime
+    ) -> Any | None:
+        """Before model execution - capture config from runtime (async)."""
+        self._capture_config(runtime, "abefore_model")
         return None
     
     def _serialize_message(self, message: Any) -> dict:
@@ -89,7 +110,7 @@ class MemoryMiddleware(AgentMiddleware):
             'timestamp': datetime.now().isoformat()
         }
     
-    def _save_conversation_history(self, messages: list):
+    async def _save_conversation_history(self, messages: list):
         """Save conversation history to memory store with thread_id support."""
         try:
             user_id = self.current_user_id
@@ -105,12 +126,12 @@ class MemoryMiddleware(AgentMiddleware):
             
             # Commit any pending transaction
             try:
-                self.sqlite_store.conn.commit()
+                await self.sqlite_store.conn.commit()
             except Exception:
                 pass
             
             # Get existing user data
-            existing_data = self.sqlite_store.get(
+            existing_data = await self.sqlite_store.aget(
                 namespace=('memories', 'conversations'),
                 key=user_id
             )
@@ -148,12 +169,12 @@ class MemoryMiddleware(AgentMiddleware):
                 user_data['threads'] = threads
             
             # Save to SqliteStore
-            self.sqlite_store.put(
+            await self.sqlite_store.aput(
                 namespace=('memories', 'conversations'),
                 key=user_id,
                 value=user_data
             )
-            
+            await self.sqlite_store.conn.commit()
             logger.info(f"Saved conversation history for user: {user_id}, thread: {thread_id}")
             logger.debug(f"Conversation data: {json.dumps(user_data, ensure_ascii=False)}")
             
@@ -163,7 +184,22 @@ class MemoryMiddleware(AgentMiddleware):
     def after_model(
         self, state: AgentState, runtime: Runtime
     ) -> Dict[str, Any] | None:
-        """Save conversation history after model execution.
+        """Save conversation history after model execution (sync).
+        
+        Args:
+            state: The current agent state containing messages and todos.
+            runtime: The LangGraph runtime instance.
+            
+        Returns:
+            None to allow normal execution.
+        """
+        # For sync version, we can't use async operations
+        return None
+
+    async def aafter_model(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Save conversation history after model execution (async).
         
         Args:
             state: The current agent state containing messages and todos.
@@ -173,15 +209,41 @@ class MemoryMiddleware(AgentMiddleware):
             None to allow normal execution.
         """
         try:
-            logger.debug("MemoryMiddleware: after_model called")
+            logger.debug("MemoryMiddleware: aafter_model called")
             
             # Get messages from state if it exists
             messages = state.get('messages', []) if 'messages' in state else []
             if messages:
                 logger.debug(f"Saving conversation history with {len(messages)} messages")
-                self._save_conversation_history(messages)
+                await self._save_conversation_history(messages)
             
         except Exception as e:
-            logger.error(f"Error in MemoryMiddleware.after_model: {e}", exc_info=True)
+            logger.error(f"Error in MemoryMiddleware.aafter_model: {e}", exc_info=True)
         
+        return None
+
+    def before_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Before agent execution - capture config from runtime."""
+        self._capture_config(runtime, "before_agent")
+        return None
+
+    async def abefore_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Before agent execution - capture config from runtime (async)."""
+        self._capture_config(runtime, "abefore_agent")
+        return None
+
+    def after_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """After agent execution."""
+        return None
+
+    async def aafter_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """After agent execution (async)."""
         return None

@@ -163,7 +163,7 @@ async def get_conversation_history(user_id: str):
         List of conversation threads
     """
     try:
-        history = agent.get_conversation_history(user_id)
+        history = await agent.get_conversation_history(user_id)
         return {
             "success": True,
             "data": history
@@ -184,7 +184,7 @@ async def get_thread_history(user_id: str, thread_id: str):
         Thread data
     """
     try:
-        thread = agent.get_thread_history(user_id, thread_id)
+        thread = await agent.get_thread_history(user_id, thread_id)
         if thread:
             return {
                 "success": True,
@@ -210,7 +210,7 @@ async def delete_thread(user_id: str, thread_id: str):
         Success message
     """
     try:
-        success = agent.delete_thread(user_id, thread_id)
+        success = await agent.delete_thread(user_id, thread_id)
         if success:
             return {
                 "success": True,

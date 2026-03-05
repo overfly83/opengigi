@@ -45,6 +45,41 @@ class LoggerMiddleware(AgentMiddleware):
         logger.debug("============*** End Tool Call ***=============")
 
         return result
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Any]
+    ) -> Any:
+        """Log tool calls before and after execution (async).
+
+        Args:
+            request: Tool call request to execute.
+            handler: Async callback that executes the tool call and returns the response.
+
+        Returns:
+            The tool call response.
+        """
+        # Log tool call details
+        logger.debug(f"============*** Start Tool Call ***===========")
+        
+        # Check if there are todos in the tool call arguments
+        if hasattr(request, 'tool_call') and 'args' in request.tool_call:
+            args = request.tool_call['args']
+            tool_name = request.tool_call['name']
+            logger.debug(f"Tool name: {tool_name} | Arguments: {args if args else 'N/A'}")
+        else:
+            tool_name = request.tool_call['name'] if hasattr(request, 'tool_call') else str(request)
+            logger.debug(f"Tool name: {tool_name}  >>>>>  Arguments: N/A")
+
+        # Execute the tool call
+        result = await handler(request)
+
+        if result and hasattr(result, 'update') and 'todos' in result.update:
+            self._log_todos(result.update['todos'])
+        # Log the result
+        logger.debug(f"Result: {result if result else 'No result'}")
+        logger.debug("============*** End Tool Call ***=============")
+
+        return result
     
 
     def before_model(
@@ -73,7 +108,7 @@ class LoggerMiddleware(AgentMiddleware):
         Returns:
             The model call response.
         """
-        logger.debug("=========*** wrap_model_call ***============")
+        logger.debug("=========*** wrap_model_call ***===========")
         
         logger.debug(f"Number of messages in request: {len(request.messages or [])}")
         
@@ -91,7 +126,40 @@ class LoggerMiddleware(AgentMiddleware):
         elif hasattr(response, 'messages'):
             logger.debug(f"Number of messages in response: {len(response.messages)}")
         
-        logger.debug("=========*** wrap_model_call End ***============")
+        logger.debug("=========*** wrap_model_call End ***===========")
+        return response
+
+    async def awrap_model_call(
+        self, request: Any, handler: Callable[[Any], Any]
+    ) -> Any:
+        """Log model calls before and after execution (async).
+
+        Args:
+            request: Model request to execute.
+            handler: Async callback that executes the model request and returns the response.
+
+        Returns:
+            The model call response.
+        """
+        logger.debug("=========*** awrap_model_call ***===========")
+        
+        logger.debug(f"Number of messages in request: {len(request.messages or [])}")
+        
+        # Execute the model call
+        logger.debug("Executing model call...")
+        response = await handler(request)
+
+        # Log response information
+        logger.debug("Model call completed")
+        if hasattr(response, 'result'):
+            result = getattr(response, 'result', '')
+            if result:
+                truncated_result = result[:200] + "..." if len(result) > 200 else result
+                logger.debug(f"Response result: {truncated_result}")
+        elif hasattr(response, 'messages'):
+            logger.debug(f"Number of messages in response: {len(response.messages)}")
+        
+        logger.debug("=========*** awrap_model_call End ***===========")
         return response
 
     def after_model(
@@ -106,8 +174,52 @@ class LoggerMiddleware(AgentMiddleware):
         Returns:
             None to allow normal execution.
         """
-        logger.debug("==========*** after_model Execution ***==========")
-        logger.debug("==========*** after_model Execution End ***==========")
+        logger.debug("==========*** after_model Execution ***===========")
+        logger.debug("==========*** after_model Execution End ***===========")
+        return None
+
+    async def aafter_model(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Log the todo list and agent messages after model execution (async).
+
+        Args:
+            state: The current agent state containing messages and todos.
+            runtime: The LangGraph runtime instance.
+
+        Returns:
+            None to allow normal execution.
+        """
+        logger.debug("==========*** aafter_model Execution ***===========")
+        logger.debug("==========*** aafter_model Execution End ***===========")
+        return None
+
+    def before_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Log before agent execution."""
+        logger.debug("==========*** before_agent Execution ***===========")
+        return None
+
+    async def abefore_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Log before agent execution (async)."""
+        logger.debug("==========*** abefore_agent Execution ***===========")
+        return None
+
+    def after_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Log after agent execution."""
+        logger.debug("==========*** after_agent Execution ***===========")
+        return None
+
+    async def aafter_agent(
+        self, state: AgentState, runtime: Runtime
+    ) -> Dict[str, Any] | None:
+        """Log after agent execution (async)."""
+        logger.debug("==========*** aafter_agent Execution ***===========")
         return None
 
     def _log_todos(self, todos):

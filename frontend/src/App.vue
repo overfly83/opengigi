@@ -151,18 +151,10 @@
 
           <!-- Process Section -->
           <div class="card shadow-lg flex-1 flex flex-col min-h-0">
-            <div class="flex justify-between items-center mb-3">
-              <h2 class="text-base font-semibold flex items-center">
-                <i class="fas fa-stream mr-2 text-blue-600"></i>
-                Execution Process
-              </h2>
-              <button v-if="processLogs.length > maxVisibleMessages" 
-                      @click="showFullHistory = !showFullHistory"
-                      class="text-xs text-blue-600 hover:underline flex items-center">
-                <i :class="showFullHistory ? 'fas fa-compress-alt' : 'fas fa-expand-alt'" class="mr-1"></i>
-                {{ showFullHistory ? '收起历史' : '展开历史' }}
-              </button>
-            </div>
+            <h2 class="text-base font-semibold mb-3 flex items-center">
+              <i class="fas fa-stream mr-2 text-blue-600"></i>
+              Execution Process
+            </h2>
             
             <!-- Progress Bar -->
             <div v-if="isRunning" class="mb-3">
@@ -179,7 +171,7 @@
             </div>
             
             <div class="process-container overflow-y-auto p-3 bg-gray-50 rounded-lg" ref="processContainer" style="height: calc(100% - 32px); min-height: 400px;">
-              <div v-for="(log, index) in displayLogs" :key="index" 
+              <div v-for="(log, index) in processLogs" :key="index" 
                    :class="['p-2 mb-1 rounded-lg', log.type === 'info' ? 'bg-blue-50' : 
                            log.type === 'success' ? 'bg-green-50' : 
                            log.type === 'error' ? 'bg-red-50' : 
@@ -190,7 +182,7 @@
                   <i class="fas fa-times-circle mt-1 mr-2 text-red-500" v-else-if="log.type === 'error'"></i>
                   <i class="fas fa-play-circle mt-1 mr-2 text-gray-500" v-else-if="log.type === 'streaming' "></i>
                   <div class="flex-1">
-                    <div class="text-xs text-gray-500 mb-1" v-if="log.timestamp">{{ log.timestamp }}</div>
+                    <div class="text-xs text-gray-500 mb-1">{{ log.timestamp }}</div>
                     <div class="text-xs whitespace-pre-wrap">{{ log.content }}</div>
                   </div>
                 </div>
@@ -344,39 +336,20 @@ export default {
       progress: 0, // 执行进度
       showHistory: false, // 显示历史记录对话框
       showHelp: false, // 显示帮助对话框
-      history: [], // 执行历史记录
-      showFullHistory: false, // 是否显示完整历史对话
-      maxVisibleMessages: 6 // 最多显示的消息数（3次对话，每次包含用户和AI消息）
+      history: [] // 执行历史记录
     }
   },
   computed: {
     formattedResult() {
       if (!this.result || !this.result.result) return ''
-      return this.result.result.replace(/\n/g, '\n')
-    },
-    displayLogs() {
-      if (this.showFullHistory || this.processLogs.length <= this.maxVisibleMessages) {
-        return this.processLogs
-      } else {
-        // 只显示最近的消息
-        return [
-          { type: 'info', content: `... 显示最近 ${this.maxVisibleMessages} 条消息，共 ${this.processLogs.length} 条 ...`, timestamp: '' },
-          ...this.processLogs.slice(-this.maxVisibleMessages)
-        ]
-      }
+      return this.result.result.replace(/\\n/g, '\n')
     }
   },
   methods: {
     startAgent() {
       if (!this.goal.trim()) return
       
-      // 保留历史对话，添加分隔符
-      if (this.processLogs.length > 0) {
-        this.addLog('info', '=====================================')
-        this.addLog('info', '开始新的执行任务')
-        this.addLog('info', '=====================================')
-      }
-      
+      this.processLogs = []
       this.result = null
       this.isRunning = true
       this.currentStream = null
@@ -776,7 +749,6 @@ export default {
       this.todos = []
       this.agentStatus = null
       this.progress = 0
-      this.showFullHistory = false // 重置历史显示状态
     },
     
     handleLoadThread(thread) {
@@ -790,7 +762,6 @@ export default {
       this.todos = []
       this.agentStatus = null
       this.progress = 0
-      this.showFullHistory = false // 重置历史显示状态
       
       // 显示历史对话消息
       this.addLog('info', `Loaded conversation from ${thread.date}`)
@@ -813,46 +784,12 @@ export default {
           content = `AI: ${aiContent || '(empty response)'}`
         } else if (msg.type === 'tool') {
           type = 'streaming'
+          // 确保 content 是字符串
           let toolContent = msg.content
-          
-          // 处理 AgentResponse 工具的输出，提取真正的结果
-          if (msg.tool_name === 'AgentResponse' && toolContent.includes('Returning structured response:')) {
-            const structuredStart = toolContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
-            let structuredContent = toolContent.substring(structuredStart).trim()
-            
-            try {
-              if (structuredContent.includes('result=')) {
-                const resultStart = structuredContent.indexOf('result=') + 'result='.length
-                let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
-                if (resultEnd === -1) {
-                  resultEnd = structuredContent.indexOf(' is_completed=')
-                }
-                if (resultEnd !== -1) {
-                  let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
-                  if (resultStr.startsWith('\'')) {
-                    resultStr = resultStr.substring(1)
-                  }
-                  if (resultStr.endsWith('\'')) {
-                    resultStr = resultStr.substring(0, resultStr.length - 1)
-                  }
-                  content = `Result: ${resultStr.replace(/\\n/g, '\n')}`
-                } else {
-                  content = `Result: ${structuredContent}`
-                }
-              } else {
-                content = `Result: ${structuredContent}`
-              }
-            } catch (e) {
-              content = `Result: ${structuredContent}`
-            }
-          } else {
-            // 对于其他工具，显示工具名称和内容，但限制长度
-            const maxLength = 300
-            const displayContent = toolContent.length > maxLength 
-              ? toolContent.substring(0, maxLength) + '...' 
-              : toolContent
-            content = `Tool [${msg.tool_name}]: ${displayContent}`
+          if (typeof toolContent === 'object' && toolContent !== null) {
+            toolContent = JSON.stringify(toolContent)
           }
+          content = `Tool [${msg.tool_name}]: ${toolContent.substring(0, 200)}${toolContent.length > 200 ? '...' : ''}`
         }
         
         if (content) {

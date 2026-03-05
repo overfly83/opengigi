@@ -31,8 +31,8 @@ class AutonomousAgent:
         """初始化自主决策Agent"""
         self.llm = self._initialize_llm()
         self.agent = None
-        self.checkpoint_saver = storage.initialize_checkpoint_saver()
-        self.sqlite_store = storage.initialize_sqlite_store()
+        self.checkpoint_saver = None
+        self.sqlite_store = None
         self.tool_registry = None
 
     def _initialize_llm(self) -> ChatOpenAI:
@@ -89,13 +89,16 @@ class AutonomousAgent:
 
     async def start_up(self) -> None:
         """初始化Agent"""
-        storage.initialize_user_preferences(self.sqlite_store)
-
+        self.checkpoint_saver = await storage.initialize_checkpoint_saver()
+        self.sqlite_store = await storage.initialize_sqlite_store()
+        
+        await storage.initialize_user_preferences(self.sqlite_store)
+        # load tools
         self.tool_registry = ToolRegistry()
         await self.tool_registry.load_tools()
         await self.tool_registry.load_mcp_tools()
-
-        tools = list(self.tool_registry.tools.values())
+        tools = self.tool_registry.list_tools()
+        # load skills
         skills_directory = skill_registry.get_skills_directory()
 
         middleware_list = [
@@ -126,6 +129,15 @@ class AutonomousAgent:
             context={"user_id": user_id, "thread_id": thread_id}
         )
 
+    async def arun(self, goal: str, session_id: Optional[str] = None, user_id: str = "user1") -> Dict[str, Any]:
+        """异步运行Agent(非流式模式)"""
+        thread_id = self._get_thread_id(session_id)
+        return await self.agent.ainvoke(
+            {"messages": [{"role": "user", "content": goal}]},
+            config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
+            context={"user_id": user_id, "thread_id": thread_id}
+        )
+
     async def run_async(
         self,
         goal: str,
@@ -138,8 +150,8 @@ class AutonomousAgent:
         try:
             thread_id = self._get_thread_id(session_id)
 
-            logger.info(f"Calling agent.stream() with stream_mode: {stream_mode}")
-            stream_result = self.agent.stream(
+            logger.info(f"Calling agent.astream() with stream_mode: {stream_mode}")
+            stream_result = self.agent.astream(
                 {"messages": [{"role": "user", "content": goal}]},
                 stream_mode=stream_mode,
                 subgraphs=subgraphs,
@@ -147,7 +159,7 @@ class AutonomousAgent:
                 context={"user_id": user_id, "thread_id": thread_id}
             )
 
-            for namespace, chunk in stream_result:
+            async for namespace, chunk in stream_result:
                 logger.debug(f"Got chunk: namespace={namespace}, type={type(chunk)}, value={chunk}")
 
                 if stream_mode == "messages":
@@ -170,14 +182,14 @@ class AutonomousAgent:
         async for result in self.run_async(goal):
             yield result
 
-    def get_conversation_history(self, user_id: str):
+    async def get_conversation_history(self, user_id: str):
         """获取用户的所有对话线程"""
-        return storage.get_conversation_history(self.sqlite_store, user_id)
+        return await storage.get_conversation_history(self.sqlite_store, user_id)
 
-    def get_thread_history(self, user_id: str, thread_id: str):
+    async def get_thread_history(self, user_id: str, thread_id: str):
         """获取用户的特定对话线程"""
-        return storage.get_thread_history(self.sqlite_store, user_id, thread_id)
+        return await storage.get_thread_history(self.sqlite_store, user_id, thread_id)
 
-    def delete_thread(self, user_id: str, thread_id: str) -> bool:
+    async def delete_thread(self, user_id: str, thread_id: str) -> bool:
         """删除用户的特定对话线程"""
-        return storage.delete_thread(self.sqlite_store, user_id, thread_id)
+        return await storage.delete_thread(self.sqlite_store, user_id, thread_id)
