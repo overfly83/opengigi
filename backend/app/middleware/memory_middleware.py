@@ -5,7 +5,7 @@ from langchain.agents.middleware.types import AgentMiddleware
 from langchain.agents.middleware import AgentState
 from langgraph.runtime import Runtime
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.store.sqlite import AsyncSqliteStore
+from langgraph.store.sqlite.aio import AsyncSqliteStore
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

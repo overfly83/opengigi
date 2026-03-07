@@ -1,81 +1,90 @@
 @echo off
 
-rem 设置项目根目录
-set PROJECT_ROOT=%~dp0
-set VENV_DIR=%PROJECT_ROOT%backend\venv
+rem Set project root directory
+set "PROJECT_ROOT=%~dp0"
+set "VENV_DIR=%PROJECT_ROOT%backend\venv"
 
-rem 检查Python是否安装
+rem Check if Python is installed
+echo Checking Python installation...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo 错误: 未找到Python，请先安装Python 3.8+
+    echo Error: Python not found, please install Python 3.8+ first
     pause
     exit /b 1
 )
 
-echo 开始安装自主决策Agent项目...
+echo Starting installation of Autonomous Decision Agent project...
 
-rem 删除旧的虚拟环境（如果存在）
+rem Remove old virtual environment if it exists
 if exist "%VENV_DIR%" (
-    echo 删除旧的虚拟环境...
+    echo Removing old virtual environment...
     rmdir /s /q "%VENV_DIR%"
+    if %errorlevel% neq 0 (
+        echo Warning: Failed to remove old virtual environment, continuing execution
+    )
 )
 
-rem 创建虚拟环境
-echo 创建虚拟环境...
+rem Create virtual environment
+echo Creating virtual environment...
 python -m venv "%VENV_DIR%"
 if %errorlevel% neq 0 (
-    echo 错误: 创建虚拟环境失败
+    echo Error: Failed to create virtual environment
     pause
     exit /b 1
 )
 
-rem 激活虚拟环境
-echo 激活虚拟环境...
+rem Set Python and pip executables paths
+set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
+set "PIP_EXE=%VENV_DIR%\Scripts\pip.exe"
+
+rem Activate virtual environment
+echo Activating virtual environment...
 call "%VENV_DIR%\Scripts\activate.bat"
 if %errorlevel% neq 0 (
-    echo 错误: 激活虚拟环境失败
+    echo Error: Failed to activate virtual environment
     pause
     exit /b 1
 )
 
-rem 升级pip
-echo 升级pip...
-pip install --upgrade pip
+rem Upgrade pip
+echo Upgrading pip...
+%PYTHON_EXE% -m pip install --upgrade --no-cache-dir pip
 if %errorlevel% neq 0 (
-    echo 警告: 升级pip失败，继续执行
+    echo Warning: Failed to upgrade pip, continuing execution
 )
 
-rem 安装Python依赖
-echo 安装Python依赖...
-pip install -r "%PROJECT_ROOT%backend\requirements.txt"
+rem Install Python dependencies
+echo Installing Python dependencies (without cache)...
+%PIP_EXE% install --no-cache-dir -r "%PROJECT_ROOT%backend\requirements.txt"
 if %errorlevel% neq 0 (
-    echo 错误: 安装Python依赖失败
+    echo Error: Failed to install Python dependencies
     pause
     exit /b 1
 )
 
-rem 检查前端目录是否存在
+rem Check if frontend directory exists
 if exist "%PROJECT_ROOT%frontend" (
-    echo 安装前端依赖...
+    echo Installing frontend dependencies...
     cd "%PROJECT_ROOT%frontend"
     
-    rem 检查npm是否安装
+    rem Check if npm is installed
     npm --version >nul 2>&1
     if %errorlevel% neq 0 (
-        echo 警告: 未找到npm，跳过前端依赖安装
+        echo Warning: npm not found, skipping frontend dependency installation
     ) else (
-        npm install
+        echo Installing npm dependencies (without cache)...
+        npm install --no-cache
         if %errorlevel% neq 0 (
-            echo 警告: 安装前端依赖失败，继续执行
+            echo Warning: Failed to install frontend dependencies, continuing execution
         )
     )
     
     cd "%PROJECT_ROOT%"
 )
 
-rem 安装完成
-echo 安装完成！
-echo 项目已成功安装，您可以使用 start.bat 脚本启动项目
-echo 按任意键退出...
+rem Installation complete
+echo Installation completed!
+echo Project has been successfully installed, you can use start.bat script to start the project
+echo Press any key to exit...
 pause >nul
 exit /b 0
