@@ -93,6 +93,7 @@
               placeholder="Enter your goal, e.g., Create a detailed weekend travel plan including attractions, transportation, and accommodation"
               rows="2"
               :disabled="isRunning"
+              @keydown.ctrl.enter="startAgent"
               class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-300 text-sm"
             ></textarea>
             

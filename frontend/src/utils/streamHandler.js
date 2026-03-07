@@ -227,11 +227,11 @@ export class StreamHandler {
                 if (resultStr.endsWith('\'')) {
                   resultStr = resultStr.substring(0, resultStr.length - 1)
                 }
-                this.addMessage(MessageType.AI, `${resultStr}`, data.source, data.namespace)
+                this.addMessage(MessageType.TOOL_RESULT, `${resultStr}`, data.source, data.namespace)
                 return
               }
             }
-            this.addMessage(MessageType.AI, `${message.content}`, data.source, data.namespace)
+            this.addMessage(MessageType.TOOL_RESULT, `${message.content}`, data.source, data.namespace)
           } else {
             this.addMessage(MessageType.AI, `${message.content}`, data.source, data.namespace)
           }
