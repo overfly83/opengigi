@@ -202,38 +202,47 @@ export class StreamHandler {
     if (data.data && data.data.model && data.data.model.structured_response) {
       const structuredResponse = data.data.model.structured_response
       if (structuredResponse.result) {
-        this.addMessage(MessageType.AI, `主Agent (${data.namespace}): ${structuredResponse.result}`, data.source, data.namespace)
+        let processedContent = this.app.processContentForTodos(structuredResponse.result)
+        if (processedContent) {
+          this.addMessage(MessageType.AI, `主Agent (${data.namespace}): ${processedContent}`, data.source, data.namespace)
+        }
       }
     }
 
     if (data.data && data.data.model && data.data.model.messages) {
       data.data.model.messages.forEach(message => {
         if (message.content) {
-          if (message.content.includes('Returning structured response:')) {
-            const structuredStart = message.content.indexOf('Returning structured response:') + 'Returning structured response:'.length
-            let structuredContent = message.content.substring(structuredStart).trim()
-            
-            if (structuredContent.includes('result=')) {
-              const resultStart = structuredContent.indexOf('result=') + 'result='.length
-              let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
-              if (resultEnd === -1) {
-                resultEnd = structuredContent.indexOf(' is_completed=')
-              }
-              if (resultEnd !== -1) {
-                let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
-                if (resultStr.startsWith('\'')) {
-                  resultStr = resultStr.substring(1)
+          let processedContent = this.app.processContentForTodos(message.content)
+          if (processedContent) {
+            if (message.content.includes('Returning structured response:')) {
+              const structuredStart = message.content.indexOf('Returning structured response:') + 'Returning structured response:'.length
+              let structuredContent = message.content.substring(structuredStart).trim()
+              
+              if (structuredContent.includes('result=')) {
+                const resultStart = structuredContent.indexOf('result=') + 'result='.length
+                let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
+                if (resultEnd === -1) {
+                  resultEnd = structuredContent.indexOf(' is_completed=')
                 }
-                if (resultStr.endsWith('\'')) {
-                  resultStr = resultStr.substring(0, resultStr.length - 1)
+                if (resultEnd !== -1) {
+                  let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
+                  if (resultStr.startsWith('\'')) {
+                    resultStr = resultStr.substring(1)
+                  }
+                  if (resultStr.endsWith('\'')) {
+                    resultStr = resultStr.substring(0, resultStr.length - 1)
+                  }
+                  let processedResult = this.app.processContentForTodos(resultStr)
+                  if (processedResult) {
+                    this.addMessage(MessageType.TOOL_RESULT, `${processedResult}`, data.source, data.namespace)
+                  }
+                  return
                 }
-                this.addMessage(MessageType.TOOL_RESULT, `${resultStr}`, data.source, data.namespace)
-                return
               }
+              this.addMessage(MessageType.TOOL_RESULT, `${processedContent}`, data.source, data.namespace)
+            } else {
+              this.addMessage(MessageType.AI, `${processedContent}`, data.source, data.namespace)
             }
-            this.addMessage(MessageType.TOOL_RESULT, `${message.content}`, data.source, data.namespace)
-          } else {
-            this.addMessage(MessageType.AI, `${message.content}`, data.source, data.namespace)
           }
         }
       })
@@ -242,7 +251,10 @@ export class StreamHandler {
     if (data.data && data.data.tools && data.data.tools.messages) {
       data.data.tools.messages.forEach(message => {
         if (message.content) {
-          this.addMessage(MessageType.TOOL_RESULT, `工具 (${data.namespace}): ${message.content}`, data.source, data.namespace)
+          let processedContent = this.app.processContentForTodos(message.content)
+          if (processedContent) {
+            this.addMessage(MessageType.TOOL_RESULT, `工具 (${data.namespace}): ${processedContent}`, data.source, data.namespace)
+          }
         }
       })
     }

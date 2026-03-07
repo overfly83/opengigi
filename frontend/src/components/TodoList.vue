@@ -16,43 +16,42 @@
       </div>
     </div>
     
-    <div v-if="filteredTodos.length > 0" class="space-y-1">
+    <div v-if="filteredTodos.length > 0" class="space-y-0.5">
       <div
         v-for="(todo, index) in filteredTodos"
         :key="index"
-        class="todo-item p-2 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors duration-200"
+        class="todo-item p-1 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors duration-200"
         :class="{'border-green-200': todo.status === 'completed', 'border-blue-200': todo.status === 'in_progress', 'border-yellow-200': todo.status === 'pending', 'border-gray-200': todo.status === 'skipped'}"
       >
-        <div class="flex items-center justify-between w-full">
-          <div class="flex items-center flex-1 min-w-0">
-            <div class="mr-2 flex-shrink-0">
-              <div class="relative">
-                <i
+        <div class="flex items-center w-full">
+          <div class="mr-2 flex-shrink-0">
+            <div class="relative">
+              <i
                   v-if="todo.status === 'completed'"
-                  class="fas fa-check-circle text-green-500 text-sm"
+                  class="fas fa-check-circle text-green-500 text-xs"
                   :title="getStatusText(todo.status)"
                 ></i>
                 <i
                   v-else-if="todo.status === 'in_progress'"
-                  class="fas fa-spinner fa-spin text-blue-500 text-sm"
+                  class="fas fa-spinner fa-spin text-blue-500 text-xs"
                   :title="getStatusText(todo.status)"
                 ></i>
                 <i
                   v-else-if="todo.status === 'skipped'"
-                  class="fas fa-ban text-gray-400 text-sm"
+                  class="fas fa-ban text-gray-400 text-xs"
                   :title="getStatusText(todo.status)"
                 ></i>
                 <i
                   v-else
-                  class="fas fa-circle text-gray-300 text-sm"
+                  class="fas fa-circle text-gray-300 text-xs"
                   :title="getStatusText(todo.status)"
                 ></i>
-              </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="relative">
-                <p
-                  class="text-xs font-medium truncate"
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="relative">
+              <p
+                  class="text-xs font-medium truncate leading-tight"
                   :class="{
                     'line-through text-gray-500': todo.status === 'completed',
                     'line-through text-gray-400': todo.status === 'skipped'
@@ -61,60 +60,7 @@
                 >
                   {{ todo.content }}
                 </p>
-              </div>
             </div>
-          </div>
-          <div class="ml-2 flex-shrink-0 flex items-center space-x-1">
-            <span
-              v-if="todo.priority"
-              class="text-xs px-1.5 py-0.5 rounded-full text-xs"
-              :class="{
-                'bg-red-100 text-red-600': todo.priority === 'high',
-                'bg-yellow-100 text-yellow-600': todo.priority === 'medium',
-                'bg-green-100 text-green-600': todo.priority === 'low'
-              }"
-              :title="todo.priority"
-            >
-              <i
-                v-if="todo.priority === 'high'"
-                class="fas fa-exclamation-circle text-xs"
-              ></i>
-              <i
-                v-else-if="todo.priority === 'medium'"
-                class="fas fa-exclamation-triangle text-xs"
-              ></i>
-              <i
-                v-else
-                class="fas fa-info-circle text-xs"
-              ></i>
-            </span>
-            <span
-              class="text-xs px-1.5 py-0.5 rounded-full text-xs"
-              :class="{
-                'bg-green-100 text-green-600': todo.status === 'completed',
-                'bg-blue-100 text-blue-600': todo.status === 'in_progress',
-                'bg-yellow-100 text-yellow-600': todo.status === 'pending',
-                'bg-gray-100 text-gray-500': todo.status === 'skipped'
-              }"
-              :title="getStatusText(todo.status)"
-            >
-              <i
-                v-if="todo.status === 'completed'"
-                class="fas fa-check text-xs"
-              ></i>
-              <i
-                v-else-if="todo.status === 'in_progress'"
-                class="fas fa-spinner text-xs"
-              ></i>
-              <i
-                v-else-if="todo.status === 'skipped'"
-                class="fas fa-ban text-xs"
-              ></i>
-              <i
-                v-else
-                class="fas fa-hourglass-start text-xs"
-              ></i>
-            </span>
           </div>
         </div>
       </div>
