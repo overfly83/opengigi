@@ -1,3 +1,5 @@
+import { MessageType } from './messageTypes'
+
 export class ResultProcessor {
   constructor(app) {
     this.app = app
@@ -18,10 +20,10 @@ export class ResultProcessor {
 
     for (const message of messages) {
       if (message.type === 'human') {
-        this.app.addLog('info', `用户: ${message.content}`)
+        this.app.addLog(MessageType.HUMAN, `用户: ${message.content}`)
       } else if (message.type === 'ai') {
         if (message.tool_calls && message.tool_calls.length > 0) {
-          this.app.addLog('info', `主Agent (()): ${message.content || '正在调用工具...'}`)
+          this.app.addLog(MessageType.AI, `主Agent (()): ${message.content || '正在调用工具...'}`)
           for (const toolCall of message.tool_calls) {
             if (toolCall.function) {
               const funcName = toolCall.function.name
@@ -34,21 +36,21 @@ export class ResultProcessor {
               } catch (e) {
                 args = toolCall.function.arguments
               }
-              this.app.addLog('info', `  调用工具: ${funcName} ${JSON.stringify(args)}`)
+              this.app.addLog(MessageType.TOOL_CALL, `  调用工具: ${funcName} ${JSON.stringify(args)}`)
             }
           }
         } else {
-          this.app.addLog('info', `主Agent (()): ${message.content}`)
+          this.app.addLog(MessageType.AI, `主Agent (()): ${message.content}`)
           finalAiMessage = message
         }
       } else if (message.type === 'tool') {
-        this.app.addLog('info', `工具 ${message.name}: ${message.content}`)
+        this.app.addLog(MessageType.TOOL_RESULT, `工具 ${message.name}: ${message.content}`)
       }
     }
 
-    this.app.addLog('info', `=== reflect 阶段 ===`)
-    this.app.addLog('info', `结果: ${finalAiMessage ? finalAiMessage.content : '执行完成'}`)
-    this.app.addLog('success', '\n=== 目标完成 ===')
+    this.app.addLog(MessageType.SYSTEM, `=== reflect 阶段 ===`)
+    this.app.addLog(MessageType.AI, `结果: ${finalAiMessage ? finalAiMessage.content : '执行完成'}`)
+    this.app.addLog(MessageType.SYSTEM, '\n=== 目标完成 ===')
 
     let resultContent = finalAiMessage ? finalAiMessage.content : '执行完成'
 
@@ -65,20 +67,20 @@ export class ResultProcessor {
   }
 
   processOldFormat(resultData) {
-    this.app.addLog('info', `=== ${resultData.phase} 阶段 ===`)
-    this.app.addLog('info', `结果: ${resultData.result}`)
+    this.app.addLog(MessageType.SYSTEM, `=== ${resultData.phase} 阶段 ===`)
+    this.app.addLog(MessageType.AI, `结果: ${resultData.result}`)
 
     if (resultData.is_completed) {
-      this.app.addLog('success', '\n=== 目标完成 ===')
+      this.app.addLog(MessageType.SYSTEM, '\n=== 目标完成 ===')
     } else {
-      this.app.addLog('info', '\n=== 目标进行中 ===')
+      this.app.addLog(MessageType.SYSTEM, '\n=== 目标进行中 ===')
     }
 
     if (resultData.todos && resultData.todos.length > 0) {
       this.app.todos = resultData.todos
-      this.app.addLog('info', '\n=== 待办事项 ===')
+      this.app.addLog(MessageType.SYSTEM, '\n=== 待办事项 ===')
       resultData.todos.forEach(todo => {
-        this.app.addLog(todo.status, `  ${todo.content} (${todo.status})`)
+        this.app.addLog(MessageType.SYSTEM, `  ${todo.content} (${todo.status})`)
       })
     }
 

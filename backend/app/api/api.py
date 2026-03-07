@@ -6,6 +6,7 @@ import json
 from app.agent.agent import AutonomousAgent
 import asyncio
 from pydantic import BaseModel
+from typing import Optional
 # 导入自定义日志
 from app.utils.logger import get_logger
 
@@ -51,6 +52,13 @@ app.add_middleware(
 class AgentRequest(BaseModel):
     goal: str
     mode: str  # streaming 或 non-streaming
+
+
+class StreamRequest(BaseModel):
+    goal: str
+    stream_mode: str = "updates"
+    session_id: Optional[str] = None
+    user_id: str = "user1"
 
 
 @app.post("/run-agent")

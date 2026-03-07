@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ChunkCacheManager } from './chunkCacheManager'
+import { MessageType, normalizeMessageType } from './messageTypes'
 
 export class StreamHandler {
   constructor(app) {
@@ -10,8 +11,8 @@ export class StreamHandler {
   }
 
   startStreamingMode() {
-    this.app.addLog('info', '开始执行自主决策Agent（流式模式）')
-    this.app.addLog('info', `目标: ${this.app.goal}`)
+    this.app.addLog(MessageType.SYSTEM, '开始执行自主决策Agent（流式模式）')
+    this.app.addLog(MessageType.SYSTEM, `目标: ${this.app.goal}`)
     this.app.agentStatus = '执行中...' // 设置执行状态
 
     let url = `http://localhost:8000/run-agent-stream?goal=${encodeURIComponent(this.app.goal)}&stream_mode=updates`
@@ -32,20 +33,28 @@ export class StreamHandler {
       try {
         const data = JSON.parse(event.data)
         
-        // Check for new structured event types
-        if (data.type === 'message_delta') {
-          this.handleMessageDelta(data)
-        } else if (data.type === 'message_complete') {
-          this.handleMessageComplete(data)
-        } else if (data.type === 'tool_call') {
-          this.handleToolCall(data)
-        } else if (data.type === 'tool_result') {
-          this.handleToolResult(data)
-        } else if (data.type === 'error') {
-          this.handleError(data)
-        } else {
-          // Fallback to original handling for backward compatibility
-          this.handleStreamData(data)
+        // 根据消息类型统一处理
+        const messageType = normalizeMessageType(data.type)
+        
+        switch (messageType) {
+          case MessageType.MESSAGE_DELTA:
+            this.handleMessageDelta(data)
+            break
+          case MessageType.MESSAGE_COMPLETE:
+            this.handleMessageComplete(data)
+            break
+          case MessageType.TOOL_CALL:
+            this.handleToolCall(data)
+            break
+          case MessageType.TOOL_RESULT:
+            this.handleToolResult(data)
+            break
+          case MessageType.ERROR:
+            this.handleError(data)
+            break
+          default:
+            // 处理其他消息类型
+            this.handleStreamData(data)
         }
       } catch (error) {
         console.error('解析流数据失败:', error)
@@ -57,7 +66,7 @@ export class StreamHandler {
       this.eventSource.close()
       this.app.isRunning = false
       this.app.agentStatus = null // 清除状态
-      this.app.addLog('error', '流式连接失败，请重试')
+      this.app.addLog(MessageType.ERROR, '流式连接失败，请重试')
     }
   }
 
@@ -68,8 +77,8 @@ export class StreamHandler {
 
     // 处理缓冲区中剩余的内容
     if (this.jsonBuffer.length > 0) {
-      // 直接添加剩余内容作为info类型消息
-      this.addMessage('info', this.jsonBuffer, 'done', 'done')
+      // 直接添加剩余内容作为系统类型消息
+      this.addMessage(MessageType.SYSTEM, this.jsonBuffer, 'done', 'done')
     }
 
     this.app.updateTodoListOnCompletion()
@@ -136,14 +145,34 @@ export class StreamHandler {
   }
 
   handleStreamData(data) {
-    if (data.type === 'token') {
-      this._handleTokenData(data)
-    } else if (data.type === 'update') {
-      this._handleUpdateData(data)
+    // 根据统一的消息类型处理
+    const messageType = normalizeMessageType(data.type)
+    
+    switch (messageType) {
+      case MessageType.AI:
+        this._handleAiMessage(data)
+        break
+      case MessageType.TOOL_CALL:
+        this._handleToolCallMessage(data)
+        break
+      case MessageType.TOOL_RESULT:
+        this._handleToolResultMessage(data)
+        break
+      case MessageType.STREAMING:
+        this._handleStreamingMessage(data)
+        break
+      case MessageType.SYSTEM:
+        this._handleSystemMessage(data)
+        break
+      case MessageType.ERROR:
+        this._handleErrorMessage(data)
+        break
+      default:
+        this._handleDefaultMessage(data)
     }
   }
 
-  _handleTokenData(data) {
+  _handleAiMessage(data) {
     if (!data.content) return
 
     let processedContent = this.app.processContentForTodos(data.content)
@@ -153,111 +182,117 @@ export class StreamHandler {
       this.chunkCacheManager.initialize(this.app.todos)
     }
 
-    // 直接添加消息，使用info类型
-    this.addMessage('info', processedContent, data.source, data.namespace)
+    this.addMessage(MessageType.AI, processedContent, data.source, data.namespace)
   }
 
-  _handleUpdateData(data) {
-    // 处理结构化响应
-    this._handleStructuredResponse(data)
-    
-    // 处理model中的消息
-    this._handleModelMessages(data)
-    
-    // 处理tools中的消息
-    this._handleToolsMessages(data)
+  _handleToolCallMessage(data) {
+    if (!data.content) return
+
+    this.addMessage(MessageType.TOOL_CALL, `调用工具: ${data.content}`, data.source, data.namespace)
   }
 
-  _handleStructuredResponse(data) {
+  _handleToolResultMessage(data) {
+    if (!data.content) return
+
+    this.addMessage(MessageType.TOOL_RESULT, `工具结果: ${data.content}`, data.source, data.namespace, data.tool_name)
+  }
+
+  _handleStreamingMessage(data) {
+    // 处理流式消息
     if (data.data && data.data.model && data.data.model.structured_response) {
       const structuredResponse = data.data.model.structured_response
       if (structuredResponse.result) {
-        // 只显示结果内容，忽略技术术语
-        this.addMessage('ai', `主Agent (${data.namespace}): ${structuredResponse.result}`, data.source, data.namespace)
+        this.addMessage(MessageType.AI, `主Agent (${data.namespace}): ${structuredResponse.result}`, data.source, data.namespace)
       }
     }
-  }
 
-  _handleModelMessages(data) {
     if (data.data && data.data.model && data.data.model.messages) {
       data.data.model.messages.forEach(message => {
-        this._handleMessage(message, data)
+        if (message.content) {
+          if (message.content.includes('Returning structured response:')) {
+            const structuredStart = message.content.indexOf('Returning structured response:') + 'Returning structured response:'.length
+            let structuredContent = message.content.substring(structuredStart).trim()
+            
+            if (structuredContent.includes('result=')) {
+              const resultStart = structuredContent.indexOf('result=') + 'result='.length
+              let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
+              if (resultEnd === -1) {
+                resultEnd = structuredContent.indexOf(' is_completed=')
+              }
+              if (resultEnd !== -1) {
+                let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
+                if (resultStr.startsWith('\'')) {
+                  resultStr = resultStr.substring(1)
+                }
+                if (resultStr.endsWith('\'')) {
+                  resultStr = resultStr.substring(0, resultStr.length - 1)
+                }
+                this.addMessage(MessageType.AI, `${resultStr}`, data.source, data.namespace)
+                return
+              }
+            }
+            this.addMessage(MessageType.AI, `${message.content}`, data.source, data.namespace)
+          } else {
+            this.addMessage(MessageType.AI, `${message.content}`, data.source, data.namespace)
+          }
+        }
       })
     }
-  }
 
-  _handleToolsMessages(data) {
     if (data.data && data.data.tools && data.data.tools.messages) {
       data.data.tools.messages.forEach(message => {
         if (message.content) {
-          this.addMessage('tool_result', `工具 (${data.namespace}): ${message.content}`, data.source, data.namespace)
+          this.addMessage(MessageType.TOOL_RESULT, `工具 (${data.namespace}): ${message.content}`, data.source, data.namespace)
         }
       })
     }
   }
 
-  _handleMessage(message, data) {
-    const namespace = data.namespace
-    
-    // 处理带内容的消息
-    if (message.content) {
-      if (message.content.includes('Returning structured response:')) {
-        // 提取结果部分，忽略技术术语
-        const structuredStart = message.content.indexOf('Returning structured response:') + 'Returning structured response:'.length
-        let structuredContent = message.content.substring(structuredStart).trim()
-        
-        if (structuredContent.includes('result=')) {
-          const resultStart = structuredContent.indexOf('result=') + 'result='.length
-          let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
-          if (resultEnd === -1) {
-            resultEnd = structuredContent.indexOf(' is_completed=')
-          }
-          if (resultEnd !== -1) {
-            let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
-            if (resultStr.startsWith('\'')) {
-              resultStr = resultStr.substring(1)
-            }
-            if (resultStr.endsWith('\'')) {
-              resultStr = resultStr.substring(0, resultStr.length - 1)
-            }
-            // 只显示结果内容
-            this.addMessage('ai', `${resultStr}`, data.source, namespace)
-            return
-          }
-        }
-        // 如果没有找到结果部分，使用原始内容
-        this.addMessage('ai', `${message.content}`, data.source, namespace)
-      } else if (message.type === 'tool') {
-        // 处理工具消息
-        this.addMessage('tool_result', `${message.content}`, data.source, namespace)
-      } else {
-        // 其他消息类型
-        this.addMessage('info', `${message.content}`, data.source, namespace)
-      }
-    }
-    
-    // 处理工具调用消息（即使没有content）
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      message.tool_calls.forEach(toolCall => {
-        this.addMessage('tool_call', `${JSON.stringify(toolCall.args)}`, data.source, namespace)
-      })
-    }
+  _handleSystemMessage(data) {
+    if (!data.content) return
+
+    this.addMessage(MessageType.SYSTEM, `系统: ${data.content}`, data.source, data.namespace)
+  }
+
+  _handleErrorMessage(data) {
+    if (!data.content) return
+
+    this.addMessage(MessageType.ERROR, `错误: ${data.content}`, data.source, data.namespace)
+  }
+
+  _handleDefaultMessage(data) {
+    if (!data.content) return
+
+    this.addMessage(MessageType.SYSTEM, data.content, data.source, data.namespace)
   }
   
   // 添加消息的辅助方法
-  addMessage(type, content, source, namespace) {
+  addMessage(type, content, source, namespace, toolName = null) {
     this.jsonBuffer += content
     // 直接使用指定的类型，不需要再解析
-    this.app.addLog(type, content)
+    // 处理换行符，确保\n被转换为\n
+    const processedContent = content.replace(/\\n/g, '\n')
+    const logItem = {
+      type: type,
+      content: processedContent,
+      timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    }
+    // 添加tool_name字段（如果有）
+    if (toolName) {
+      logItem.tool_name = toolName
+    }
+    // 使用app的addLog方法添加消息
+    this.app.processLogs.push(logItem)
+    this.app.$nextTick(() => {
+      this.app.scrollToBottom()
+    })
     this.app.currentStream = {
       source: source,
       namespace: namespace,
-      content: content
+      content: processedContent
     }
     this.jsonBuffer = ''
   }
-
-
 
   stop() {
     if (this.eventSource) {
@@ -266,31 +301,36 @@ export class StreamHandler {
     }
   }
 
-  // New handler methods for structured SSE events
+  // 处理结构化SSE事件
   handleMessageDelta(data) {
     if (data.content) {
       let processedContent = this.app.processContentForTodos(data.content)
       if (!processedContent) return
 
-      // 直接添加消息，使用info类型
-      this.addMessage('info', processedContent, 'main', [])
+      // 直接添加消息，使用AI类型
+      this.addMessage(MessageType.AI, processedContent, 'main', [])
     }
   }
 
   handleMessageComplete(data) {
     if (data.content) {
       // 处理最终消息内容
-      this.app.addLog('info', `最终结果: ${data.content}`)
+      this.app.addLog(MessageType.SYSTEM, `最终结果: ${data.content}`)
     }
   }
 
   handleToolCall(data) {
-    if (data.tool_call) {
-      const toolCall = data.tool_call
-      const toolName = toolCall.name || 'unknown'
-      const argumentsStr = JSON.stringify(toolCall.arguments || {})
-      // Add tool call with wrench icon
-      this.app.addLog('tool_call', `调用工具: ${toolName} ${argumentsStr}`)
+    if (data.tool_calls) {
+      // 处理工具调用
+      const toolCalls = Array.isArray(data.tool_calls) ? data.tool_calls : [data.tool_calls]
+      toolCalls.forEach(toolCall => {
+        const toolName = toolCall.name || toolCall.function || 'unknown'
+        const argumentsStr = JSON.stringify(toolCall.args || toolCall.arguments || {})
+        this.addMessage(MessageType.TOOL_CALL, `调用工具: ${toolName} ${argumentsStr}`, 'main', [])
+      })
+    } else if (data.content) {
+      // 兼容旧格式
+      this.addMessage(MessageType.TOOL_CALL, `调用工具: ${data.content}`, 'main', [])
     }
   }
 
@@ -299,16 +339,19 @@ export class StreamHandler {
       const toolResult = data.tool_result
       const toolName = toolResult.name || 'tool'
       const content = toolResult.content || ''
-      // Add tool result with toolbox icon
-      this.app.addLog('tool_result', `工具结果: ${toolName} ${content}`)
+      this.addMessage(MessageType.TOOL_RESULT, `工具结果: ${content}`, 'main', [], toolName)
+    } else if (data.content) {
+      // 兼容旧格式
+      this.addMessage(MessageType.TOOL_RESULT, `工具结果: ${data.content}`, 'main', [], data.tool_name)
     }
   }
 
   handleError(data) {
-    const errorMessage = data.message || '未知错误'
-    this.app.addLog('error', `错误: ${errorMessage}`)
+    const errorMessage = data.error || data.message || '未知错误'
+    this.addMessage(MessageType.ERROR, `错误: ${errorMessage}`, 'main', [])
     this.eventSource.close()
     this.app.isRunning = false
     this.app.agentStatus = null
   }
 }
+

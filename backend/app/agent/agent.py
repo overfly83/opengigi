@@ -193,8 +193,8 @@ class AutonomousAgent:
                         
                         # 2. 处理新的结构化事件格式
                         if isinstance(result, dict):
-                            # 处理token类型的结果（消息内容）
-                            if result.get('type') == 'token' and result.get('content'):
+                            # 处理ai类型的结果（消息内容）
+                            if result.get('type') == 'ai' and result.get('content'):
                                 content = result['content']
                                 msg_id = str(id(result))  # 生成消息ID
                                 
@@ -207,11 +207,11 @@ class AutonomousAgent:
                                 accumulated_content += content
                                 
                                 # 发送message_delta事件
-                                yield stream_processor.log_sse_event('message_delta', {
-                                    'id': msg_id,
-                                    'content': content,
-                                    'accumulated_content': accumulated_content
-                                })
+                                yield stream_processor.create_message_delta_event(
+                                    msg_id,
+                                    content,
+                                    accumulated_content
+                                )
                                 
                                 # 标记为已发送
                                 sent_message_ids.add(msg_id)
@@ -239,10 +239,10 @@ class AutonomousAgent:
 
             # 3. 流结束时发送message_complete事件
             if accumulated_content:
-                yield stream_processor.log_sse_event('message_complete', {
-                    'content': accumulated_content,
-                    'chunk_count': chunk_count
-                })
+                yield stream_processor.create_message_complete_event(
+                    accumulated_content,
+                    chunk_count
+                )
             
             # 4. 发送完成标记
             logger.debug(f"[SSE→Client] [DONE] - Stream completed, total chunks: {chunk_count}")
@@ -253,10 +253,7 @@ class AutonomousAgent:
             traceback.print_exc()
             
             # 发送错误事件
-            yield stream_processor.log_sse_event('error', {
-                'error': str(e),
-                'message': 'An error occurred during streaming'
-            })
+            yield stream_processor.create_error_event(e)
             # 发送完成标记
             logger.debug(f"[SSE→Client] [DONE] - Stream completed with error")
             yield "data: [DONE]\n\n"

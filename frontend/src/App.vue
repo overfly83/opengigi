@@ -162,24 +162,15 @@
             
             <div class="process-container overflow-y-auto p-3 bg-gray-50 rounded-lg" ref="processContainer" style="height: calc(100% - 32px); min-height: 400px;">
               <div v-for="(log, index) in processLogs" :key="index" 
-                   :class="['p-2 mb-1 rounded-lg', log.type === 'info' ? 'bg-blue-50' : 
-                           log.type === 'success' ? 'bg-green-50' : 
-                           log.type === 'error' ? 'bg-red-50' : 
-                           log.type === 'streaming' ? 'bg-gray-100' :
-                           log.type === 'tool_call' ? 'bg-purple-50' :
-                           log.type === 'tool_result' ? 'bg-indigo-50' :
-                           log.type === 'ai' ? 'bg-teal-50' : '']">
+                   :class="['p-2 mb-1 rounded-lg', getMessageBgColor(log.type)]">
                 <div class="flex items-start">
-                  <i class="fas fa-comment-dots mt-1 mr-2 text-blue-500" v-if="log.type === 'info' "></i>
-                  <i class="fas fa-check-circle mt-1 mr-2 text-green-500" v-else-if="log.type === 'success'"></i>
-                  <i class="fas fa-exclamation-circle mt-1 mr-2 text-red-500" v-else-if="log.type === 'error'"></i>
-                  <i class="fas fa-play-circle mt-1 mr-2 text-gray-500" v-else-if="log.type === 'streaming' "></i>
-                  <i class="fas fa-tools mt-1 mr-2 text-purple-500" v-else-if="log.type === 'tool_call' "></i>
-                  <i class="fas fa-toolbox mt-1 mr-2 text-indigo-500" v-else-if="log.type === 'tool_result' "></i>
-                  <i class="fas fa-robot mt-1 mr-2 text-orange-300" v-else-if="log.type === 'ai' "></i>
+                  <div class="flex items-center">
+                    <i :class="['fas', MessageIcon[log.type] || 'fa-comment-dots', 'mt-1', 'mr-2', getMessageColor(log.type)]"></i>
+                    <span v-if="log.tool_name" class="text-xs text-gray-500 mr-2">{{ log.tool_name }}</span>
+                  </div>
                   <div class="flex-1">
                     <div class="text-xs text-gray-500 mb-1">{{ log.timestamp }}</div>
-                    <div class="text-xs whitespace-pre-wrap">{{ log.content }}</div>
+                    <div class="text-xs whitespace-pre-wrap">{{ formatMessageContent(log.type, log.content) }}</div>
                   </div>
                 </div>
               </div>
@@ -289,6 +280,7 @@ import MemoryComponent from './components/MemoryComponent.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
+import { MessageType, MessageIcon, getMessageColor, getMessageBgColor, normalizeMessageType } from './utils/messageTypes'
 
 export default {
   name: 'App',
@@ -307,6 +299,7 @@ export default {
   },
   data() {
     return {
+      MessageIcon,
       goal: '',
       mode: 'streaming',
       sessionUuid: '',
@@ -336,6 +329,8 @@ export default {
   computed: {
   },
   methods: {
+    getMessageColor,
+    getMessageBgColor,
     startAgent() {
       if (!this.goal.trim()) return
       
@@ -347,7 +342,7 @@ export default {
       this.progress = 0 // 重置进度
       
       // 添加新任务开始的标记
-      this.addLog('info', `开始新任务: ${this.goal}`)
+      this.addLog(MessageType.SYSTEM, `开始新任务: ${this.goal}`)
       
       if (this.mode === 'streaming') {
         this.startStreamingMode()
@@ -364,8 +359,11 @@ export default {
     },
     
     addLog(type, content) {
+      const normalizedType = normalizeMessageType(type)
+      // 处理换行符，确保\n被转换为\n
+      const processedContent = content.replace(/\\n/g, '\n')
       const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-      this.processLogs.push({ type, content, timestamp })
+      this.processLogs.push({ type: normalizedType, content: processedContent, timestamp })
       this.$nextTick(() => {
         this.scrollToBottom()
       })
@@ -524,9 +522,9 @@ export default {
     },
 
     startNonStreamingMode() {
-      this.addLog('info', '开始执行自主决策Agent（非流式模式）')
-      this.addLog('info', `目标: ${this.goal}`)
-      this.addLog('info', '正在执行，请稍候...')
+      this.addLog(MessageType.SYSTEM, '开始执行自主决策Agent（非流式模式）')
+      this.addLog(MessageType.SYSTEM, `目标: ${this.goal}`)
+      this.addLog(MessageType.SYSTEM, '正在执行，请稍候...')
       this.agentStatus = '执行中...' // 设置执行状态
       
       axios.post('http://localhost:8000/run-agent', {
@@ -543,10 +541,10 @@ export default {
           // 直接处理响应数据
           if (response.data.thought || response.data.result) {
             if (response.data.thought) {
-              this.addLog('info', `思考: ${response.data.thought}`)
+              this.addLog(MessageType.AI, `思考: ${response.data.thought}`)
             }
             if (response.data.result) {
-              this.addLog('success', `结果: ${response.data.result}`)
+              this.addLog(MessageType.AI, `结果: ${response.data.result}`)
             }
           }
           
@@ -555,7 +553,7 @@ export default {
           this.agentStatus = null // 清除状态
           this.saveHistory() // 保存执行历史
         } else {
-          this.addLog('error', '执行失败: ' + response.data.message)
+          this.addLog(MessageType.ERROR, '执行失败: ' + response.data.message)
           this.isRunning = false
           this.agentStatus = null // 清除状态
           this.saveHistory() // 保存执行历史
@@ -563,7 +561,7 @@ export default {
       })
       .catch(error => {
         console.error('API请求失败:', error)
-        this.addLog('error', '执行失败，请重试')
+        this.addLog(MessageType.ERROR, '执行失败，请重试')
         this.isRunning = false
         this.agentStatus = null // 清除状态
         this.saveHistory() // 保存执行历史
@@ -759,18 +757,18 @@ export default {
       this.progress = 0
       
       // 显示历史对话消息
-      this.addLog('info', `Loaded conversation from ${thread.date}`)
+      this.addLog('system', `Loaded conversation from ${thread.date}`)
       
       // 添加历史消息到 processLogs
       thread.messages.forEach(msg => {
-        let type = 'info'
+        let type = 'system'
         let content = ''
         
         if (msg.type === 'human') {
-          type = 'info'
+          type = MessageType.HUMAN
           content = msg.content
         } else if (msg.type === 'ai') {
-          type = 'ai'
+          type = MessageType.AI
           // 确保 content 是字符串
           let aiContent = msg.content
           if (typeof aiContent === 'object' && aiContent !== null) {
@@ -857,7 +855,7 @@ export default {
           // 去除多余的空白字符
           content = content.trim()
         } else if (msg.type === 'tool') {
-          type = 'tool_result'
+          type = MessageType.TOOL_RESULT
           // 确保 content 是字符串
           let toolContent = msg.content
           if (typeof toolContent === 'object' && toolContent !== null) {
@@ -973,8 +971,18 @@ export default {
         }
         
         if (content) {
+          const normalizedType = normalizeMessageType(type)
           const timestamp = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
-          this.processLogs.push({ type, content, timestamp })
+          const logItem = {
+            type: normalizedType,
+            content: this.formatMessageContent(normalizedType, content),
+            timestamp
+          }
+          // 添加tool_name字段（如果有）
+          if (msg.name) {
+            logItem.tool_name = msg.name
+          }
+          this.processLogs.push(logItem)
         }
       })
       
@@ -988,6 +996,25 @@ export default {
       if (deletedThreadId === this.sessionUuid) {
         this.startNewConversation()
       }
+    },
+    
+    formatMessageContent(type, content) {
+      if (type === MessageType.TOOL_RESULT) {
+        // 处理工具类型消息，去除技术术语
+        let formattedContent = content
+        
+        // 去除开头的技术术语
+        if (formattedContent.includes('Returning structured response:')) {
+          formattedContent = formattedContent.replace(/Returning structured response: phase='[^']+' result='/g, '')
+        }
+        
+        // 去除结尾的技术术语
+        formattedContent = formattedContent.replace(/' is_simple_and_unrelevant=None is_completed=True todos=None/g, '')
+        
+        return formattedContent
+      }
+      // 对于人类和AI类型消息，直接返回内容
+      return content
     }
   }
 }

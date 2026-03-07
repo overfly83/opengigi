@@ -1,3 +1,5 @@
+import { MessageType } from './messageTypes'
+
 export class ChunkCacheManager {
   constructor(app) {
     this.app = app
@@ -86,12 +88,12 @@ export class ChunkCacheManager {
       const taskContent = this.cache.cachedChunks.join('')
 
       if (taskIndex >= 0 && this.app.todos[taskIndex]) {
-        this.app.addLog('info', `--- 任务 ${taskIndex + 1}: ${this.app.todos[taskIndex].content} ---`)
+        this.app.addLog(MessageType.SYSTEM, `--- 任务 ${taskIndex + 1}: ${this.app.todos[taskIndex].content} ---`)
       }
 
       const processedContent = this.app.processContentForTodos(taskContent)
       if (processedContent) {
-        this.app.addLog('info', processedContent)
+        this.app.addLog(MessageType.AI, processedContent)
       }
 
       this.cache.cachedChunks = []
