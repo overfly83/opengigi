@@ -1,8 +1,44 @@
 from typing import Dict, Any, AsyncGenerator, Tuple
+import json
+from dataclasses import asdict
 
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def ensure_serializable(obj):
+    """递归处理对象，确保可以被JSON序列化"""
+    if obj is None:
+        return None
+    elif isinstance(obj, (str, int, float, bool)):
+        return obj
+    elif isinstance(obj, dict):
+        return {k: ensure_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [ensure_serializable(item) for item in obj]
+    elif hasattr(obj, '__dict__'):
+        # 处理对象实例
+        try:
+            return ensure_serializable(obj.__dict__)
+        except Exception:
+            # 如果无法序列化__dict__，尝试转换为字符串
+            return str(obj)
+    elif hasattr(obj, 'dict'):
+        # 处理Pydantic模型
+        try:
+            return ensure_serializable(obj.dict())
+        except Exception:
+            return str(obj)
+    elif hasattr(obj, 'asdict'):
+        # 处理dataclass
+        try:
+            return ensure_serializable(asdict(obj))
+        except Exception:
+            return str(obj)
+    else:
+        # 如果是其他不可序列化类型，转换为字符串
+        return str(obj)
 
 
 def extract_token_and_metadata(chunk: Any) -> Tuple[Any, Any]:
@@ -92,3 +128,14 @@ def process_unknown_chunk(namespace: str, chunk: Any) -> Dict[str, Any]:
         "namespace": namespace,
         "data": chunk
     }
+
+
+
+
+
+# 记录SSE事件的辅助函数
+def log_sse_event(event_type, event_data):
+    """记录SSE事件并返回格式化的事件字符串"""
+    logger.debug(f"[SSE→Client] type={event_type} | {json.dumps(event_data)[:200]}...")
+    return f"data: {json.dumps(event_data)}\n\n"
+

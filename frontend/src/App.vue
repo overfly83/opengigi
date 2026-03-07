@@ -6,7 +6,7 @@
         <div class="flex flex-col md:flex-row justify-between items-center">
           <div class="flex items-center mb-2 md:mb-0">
             <div class="w-8 h-8 rounded-full bg-white bg-opacity-20 flex items-center justify-center mr-2">
-              <i class="fas fa-robot text-white text-sm"></i>
+              <i class="fas fa-brands fa-bots text-white text-xl"></i>
             </div>
             <div>
               <h1 class="text-lg font-bold text-white">GiGi</h1>
@@ -137,17 +137,7 @@
             </div>
           </div>
 
-          <!-- Result Section -->
-          <div class="card shadow-lg" v-if="result">
-            <h2 class="text-base font-semibold mb-3 flex items-center">
-              <i class="fas fa-flag-checkered mr-2 text-blue-600"></i>
-              Execution Result
-            </h2>
-            
-            <div class="p-3 bg-gray-50 rounded-lg">
-              <div class="whitespace-pre-wrap text-sm leading-relaxed">{{ formattedResult }}</div>
-            </div>
-          </div>
+
 
           <!-- Process Section -->
           <div class="card shadow-lg flex-1 flex flex-col min-h-0">
@@ -175,12 +165,18 @@
                    :class="['p-2 mb-1 rounded-lg', log.type === 'info' ? 'bg-blue-50' : 
                            log.type === 'success' ? 'bg-green-50' : 
                            log.type === 'error' ? 'bg-red-50' : 
-                           log.type === 'streaming' ? 'bg-gray-100' : '']">
+                           log.type === 'streaming' ? 'bg-gray-100' :
+                           log.type === 'tool_call' ? 'bg-purple-50' :
+                           log.type === 'tool_result' ? 'bg-indigo-50' :
+                           log.type === 'ai' ? 'bg-teal-50' : '']">
                 <div class="flex items-start">
-                  <i class="fas fa-info-circle mt-1 mr-2 text-blue-500" v-if="log.type === 'info' "></i>
+                  <i class="fas fa-comment-dots mt-1 mr-2 text-blue-500" v-if="log.type === 'info' "></i>
                   <i class="fas fa-check-circle mt-1 mr-2 text-green-500" v-else-if="log.type === 'success'"></i>
-                  <i class="fas fa-times-circle mt-1 mr-2 text-red-500" v-else-if="log.type === 'error'"></i>
+                  <i class="fas fa-exclamation-circle mt-1 mr-2 text-red-500" v-else-if="log.type === 'error'"></i>
                   <i class="fas fa-play-circle mt-1 mr-2 text-gray-500" v-else-if="log.type === 'streaming' "></i>
+                  <i class="fas fa-tools mt-1 mr-2 text-purple-500" v-else-if="log.type === 'tool_call' "></i>
+                  <i class="fas fa-toolbox mt-1 mr-2 text-indigo-500" v-else-if="log.type === 'tool_result' "></i>
+                  <i class="fas fa-robot mt-1 mr-2 text-orange-300" v-else-if="log.type === 'ai' "></i>
                   <div class="flex-1">
                     <div class="text-xs text-gray-500 mb-1">{{ log.timestamp }}</div>
                     <div class="text-xs whitespace-pre-wrap">{{ log.content }}</div>
@@ -293,7 +289,6 @@ import MemoryComponent from './components/MemoryComponent.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
-import { ResultProcessor } from './utils/resultProcessor'
 
 export default {
   name: 'App',
@@ -318,7 +313,6 @@ export default {
       userId: 'user1',
       isRunning: false,
       processLogs: [],
-      result: null,
       todos: [],
       sidebarWidth: 320,
       isResizing: false,
@@ -340,22 +334,20 @@ export default {
     }
   },
   computed: {
-    formattedResult() {
-      if (!this.result || !this.result.result) return ''
-      return this.result.result.replace(/\\n/g, '\n')
-    }
   },
   methods: {
     startAgent() {
       if (!this.goal.trim()) return
       
-      this.processLogs = []
-      this.result = null
+      // 保留历史对话，只清空待办事项
       this.isRunning = true
       this.currentStream = null
       this.todos = []
       this.agentStatus = '执行中...' // 设置执行状态
       this.progress = 0 // 重置进度
+      
+      // 添加新任务开始的标记
+      this.addLog('info', `开始新任务: ${this.goal}`)
       
       if (this.mode === 'streaming') {
         this.startStreamingMode()
@@ -548,8 +540,15 @@ export default {
       })
       .then(response => {
         if (response.data.success) {
-          const resultProcessor = new ResultProcessor(this)
-          resultProcessor.processNonStreamingResult(response)
+          // 直接处理响应数据
+          if (response.data.thought || response.data.result) {
+            if (response.data.thought) {
+              this.addLog('info', `思考: ${response.data.thought}`)
+            }
+            if (response.data.result) {
+              this.addLog('success', `结果: ${response.data.result}`)
+            }
+          }
           
           this.updateTodoListOnCompletion()
           this.isRunning = false
@@ -692,7 +691,6 @@ export default {
         goal: this.goal,
         mode: this.mode,
         todos: [...this.todos],
-        result: this.result,
         timestamp: new Date().toLocaleString(),
         status: this.todos.length > 0 ? 
           this.todos.every(todo => todo.status === 'completed') ? 'Completed' : 'Partial' : 'No Tasks'
@@ -728,7 +726,6 @@ export default {
       this.goal = item.goal
       this.mode = item.mode
       this.todos = [...item.todos]
-      this.result = item.result
       this.showHistory = false
     },
     generateUuid() {
@@ -745,7 +742,6 @@ export default {
       this.sessionUuid = this.generateUuid()
       this.goal = ''
       this.processLogs = []
-      this.result = null
       this.todos = []
       this.agentStatus = null
       this.progress = 0
@@ -758,7 +754,6 @@ export default {
       // 清空当前状态
       this.goal = ''
       this.processLogs = []
-      this.result = null
       this.todos = []
       this.agentStatus = null
       this.progress = 0
@@ -773,23 +768,208 @@ export default {
         
         if (msg.type === 'human') {
           type = 'info'
-          content = `User: ${msg.content}`
+          content = msg.content
         } else if (msg.type === 'ai') {
-          type = 'success'
+          type = 'ai'
           // 确保 content 是字符串
           let aiContent = msg.content
           if (typeof aiContent === 'object' && aiContent !== null) {
-            aiContent = JSON.stringify(aiContent)
+            // 检查是否是工具调用
+            if (aiContent.type === 'tool_call' && aiContent.args) {
+              // 提取工具调用信息
+              if (aiContent.args.result) {
+                // 直接使用结果
+                content = aiContent.args.result
+              } else {
+                // 提取工具调用信息
+                const toolName = aiContent.name || aiContent.type
+                const args = JSON.stringify(aiContent.args)
+                content = `${toolName} - ${args}`
+              }
+            } else if (aiContent.phase && aiContent.result) {
+              // 提取结构化结果
+              content = aiContent.result
+            } else if (aiContent.result) {
+              // 提取结果
+              content = aiContent.result
+            } else {
+              // 其他情况，尝试转换为字符串并解析
+              try {
+                const contentStr = JSON.stringify(aiContent)
+                const parsed = JSON.parse(contentStr)
+                if (parsed.args && parsed.args.result) {
+                  content = parsed.args.result
+                } else if (parsed.result) {
+                  content = parsed.result
+                } else {
+                  content = contentStr
+                }
+              } catch (e) {
+                content = String(aiContent)
+              }
+            }
+          } else if (typeof aiContent === 'string') {
+            // 字符串类型，尝试解析为JSON
+            try {
+              const parsed = JSON.parse(aiContent)
+              if (parsed.args && parsed.args.result) {
+                content = parsed.args.result
+              } else if (parsed.result) {
+                content = parsed.result
+              } else if (parsed.type === 'tool_call' && parsed.args) {
+                if (parsed.args.result) {
+                  content = parsed.args.result
+                } else {
+                  const toolName = parsed.name || parsed.type
+                  const args = JSON.stringify(parsed.args)
+                  content = `${toolName} - ${args}`
+                }
+              } else {
+                content = aiContent
+              }
+            } catch (e) {
+              // 不是JSON字符串，尝试提取result
+              if (aiContent.includes('Returning structured response:')) {
+                const structuredStart = aiContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
+                let structuredContent = aiContent.substring(structuredStart).trim()
+                
+                // 尝试提取result值
+                const resultMatch = structuredContent.match(/result='([^']+)'/)
+                if (resultMatch && resultMatch[1]) {
+                  content = resultMatch[1]
+                } else {
+                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
+                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
+                    content = resultMatchDoubleQuote[1]
+                  } else {
+                    content = structuredContent
+                  }
+                }
+              } else {
+                content = aiContent
+              }
+            }
+          } else {
+            content = aiContent || '(empty response)'
           }
-          content = `AI: ${aiContent || '(empty response)'}`
+          // 处理换行符
+          content = content.replace(/\\n/g, '\n')
+          // 去除多余的空白字符
+          content = content.trim()
         } else if (msg.type === 'tool') {
-          type = 'streaming'
+          type = 'tool_result'
           // 确保 content 是字符串
           let toolContent = msg.content
           if (typeof toolContent === 'object' && toolContent !== null) {
-            toolContent = JSON.stringify(toolContent)
+            // 检查是否是结构化响应
+            if (typeof toolContent === 'string' && toolContent.includes('Returning structured response:')) {
+              // 提取结果部分
+              const structuredStart = toolContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
+              let structuredContent = toolContent.substring(structuredStart).trim()
+              
+              // 尝试解析为JSON
+              try {
+                // 尝试将structuredContent转换为有效的JSON
+                const jsonStr = structuredContent.replace(/'/g, '"')
+                const parsed = JSON.parse(jsonStr)
+                if (parsed.result) {
+                  content = parsed.result
+                } else {
+                  // 尝试提取result值
+                  const resultMatch = structuredContent.match(/result='([^']+)'/)
+                  if (resultMatch && resultMatch[1]) {
+                    content = resultMatch[1]
+                  } else {
+                    const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
+                    if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
+                      content = resultMatchDoubleQuote[1]
+                    } else {
+                      content = structuredContent
+                    }
+                  }
+                }
+              } catch (e) {
+                // 解析失败，尝试提取result值
+                const resultMatch = structuredContent.match(/result='([^']+)'/)
+                if (resultMatch && resultMatch[1]) {
+                  content = resultMatch[1]
+                } else {
+                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
+                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
+                    content = resultMatchDoubleQuote[1]
+                  } else {
+                    content = structuredContent
+                  }
+                }
+              }
+            } else if (toolContent.status === 'success' && toolContent.current) {
+              // 天气工具结果
+              const location = toolContent.location.name || '未知位置'
+              const current = toolContent.current
+              content = `${location}当前天气：\n`
+              if (current.temp) content += `温度：${current.temp}°C\n`
+              if (current.condition && current.condition.text) content += `天气：${current.condition.text}\n`
+              if (current.wind_kph) content += `风力：${current.wind_kph} km/h\n`
+              if (current.humidity) content += `湿度：${current.humidity}%\n`
+              if (current.air_quality && current.air_quality.us_epa_index) {
+                const airQuality = current.air_quality.us_epa_index
+                content += `空气质量：${airQuality === 1 ? '优' : airQuality === 2 ? '良' : airQuality === 3 ? '轻度污染' : airQuality === 4 ? '中度污染' : airQuality === 5 ? '重度污染' : '严重污染'}\n`
+              }
+            } else {
+              // 其他工具结果，尝试解析为JSON
+              try {
+                const contentStr = JSON.stringify(toolContent)
+                const parsed = JSON.parse(contentStr)
+                if (parsed.result) {
+                  content = parsed.result
+                } else if (parsed.args && parsed.args.result) {
+                  content = parsed.args.result
+                } else {
+                  content = contentStr
+                }
+              } catch (e) {
+                content = String(toolContent)
+              }
+            }
+          } else if (typeof toolContent === 'string') {
+            // 字符串类型，尝试解析为JSON
+            try {
+              const parsed = JSON.parse(toolContent)
+              if (parsed.result) {
+                content = parsed.result
+              } else if (parsed.args && parsed.args.result) {
+                content = parsed.args.result
+              } else if (toolContent.includes('Returning structured response:')) {
+                // 提取结果部分
+                const structuredStart = toolContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
+                let structuredContent = toolContent.substring(structuredStart).trim()
+                
+                // 尝试提取result值
+                const resultMatch = structuredContent.match(/result='([^']+)'/)
+                if (resultMatch && resultMatch[1]) {
+                  content = resultMatch[1]
+                } else {
+                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
+                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
+                    content = resultMatchDoubleQuote[1]
+                  } else {
+                    content = structuredContent
+                  }
+                }
+              } else {
+                content = toolContent
+              }
+            } catch (e) {
+              // 不是JSON字符串，直接使用
+              content = toolContent
+            }
+          } else {
+            content = toolContent
           }
-          content = `Tool [${msg.tool_name}]: ${toolContent.substring(0, 200)}${toolContent.length > 200 ? '...' : ''}`
+          // 处理换行符
+          content = content.replace(/\\n/g, '\n')
+          // 去除多余的空白字符
+          content = content.trim()
         }
         
         if (content) {
@@ -898,6 +1078,33 @@ export default {
 .dark .bg-gray-100 {
   background-color: #1e293b;
   color: #e2e8f0;
+}
+
+.dark .bg-purple-50 {
+  background-color: #4c1d95;
+  color: #e2e8f0;
+}
+
+.dark .bg-indigo-50 {
+  background-color: #312e81;
+  color: #e2e8f0;
+}
+
+.dark .text-purple-500 {
+  color: #a855f7;
+}
+
+.dark .text-indigo-500 {
+  color: #6366f1;
+}
+
+.dark .bg-teal-50 {
+  background-color: #0d9488;
+  color: #e2e8f0;
+}
+
+.dark .text-teal-500 {
+  color: #2dd4bf;
 }
 
 .dark .border-gray-300 {

@@ -24,18 +24,18 @@ def initialize_mcp_client():
             #     "args": ["/path/to/math_server.py"],
             #     "transport": "stdio",
             # },
-            "ppt": {
-                "command": "uvx",
-                "args": [
-                    "--from", "office-powerpoint-mcp-server", "ppt_mcp_server"
-                ],
-                "env": {},
-                "transport": "stdio",
-            },
+            # "ppt": {
+            #     "command": "uvx",
+            #     "args": [
+            #         "--from", "office-powerpoint-mcp-server", "ppt_mcp_server"
+            #     ],
+            #     "env": {},
+            #     "transport": "stdio",
+            # },
 
             "playwright": {
                 "url": "http://localhost:8931/mcp",
-                "transport": "http",
+                "transport": "http"
             }
         }
     )

@@ -1,5 +1,6 @@
 import uuid
 import traceback
+import json
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, AsyncGenerator
 
@@ -115,19 +116,32 @@ class AutonomousAgent:
             response_format=AgentResponse,
             middleware=middleware_list,
             backend=self.create_backend,
-            store=self.sqlite_store,
-            checkpointer=self.checkpoint_saver,
+            store= self.sqlite_store,
+            checkpointer= self.checkpoint_saver,
             context_schema=Context
         )
+    
+    async def shutdown(self) -> None:
+        """关闭Agent并清理资源"""
+        logger.info("Shutting down agent resources...")
+        # 清理SQLite连接
+        if hasattr(self, 'sqlite_store') and self.sqlite_store:
+            try:
+                # 关闭检查点保存器连接
+                if hasattr(self.checkpoint_saver, 'conn') and self.checkpoint_saver.conn:
+                    await self.checkpoint_saver.conn.close()
+                # 关闭SQLite存储连接
+                if hasattr(self.sqlite_store, 'conn') and self.sqlite_store.conn:
+                    await self.sqlite_store.conn.close()
+                logger.info("SQLite connections are closed.")
+            except Exception as e:
+                logger.error(f"Error closing SQLite connections: {e}")
+
 
     def run(self, goal: str, session_id: Optional[str] = None, user_id: str = "user1") -> Dict[str, Any]:
         """同步运行Agent(非流式模式)"""
-        thread_id = self._get_thread_id(session_id)
-        return self.agent.invoke(
-            {"messages": [{"role": "user", "content": goal}]},
-            config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
-            context={"user_id": user_id, "thread_id": thread_id}
-        )
+        import asyncio
+        return asyncio.run(self.arun(goal, session_id, user_id))
 
     async def arun(self, goal: str, session_id: Optional[str] = None, user_id: str = "user1") -> Dict[str, Any]:
         """异步运行Agent(非流式模式)"""
@@ -145,7 +159,7 @@ class AutonomousAgent:
         subgraphs: bool = True,
         session_id: Optional[str] = None,
         user_id: str = "user1"
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[str, None]:
         """异步运行Agent(流式输出)"""
         try:
             thread_id = self._get_thread_id(session_id)
@@ -159,28 +173,109 @@ class AutonomousAgent:
                 context={"user_id": user_id, "thread_id": thread_id}
             )
 
+            # 跟踪已发送的消息ID
+            sent_message_ids = set()
+            accumulated_content = ""
+            chunk_count = 0
+
             async for namespace, chunk in stream_result:
+                chunk_count += 1
                 logger.debug(f"Got chunk: namespace={namespace}, type={type(chunk)}, value={chunk}")
 
+                # 处理不同类型的chunk
                 if stream_mode == "messages":
                     async for result in stream_processor.process_message_chunk(namespace, chunk):
-                        yield result
+                        # 确保result可以被JSON序列化
+                        result = stream_processor.ensure_serializable(result)
+                        
+                        # 1. 保持原有格式输出（向后兼容）
+                        yield f"data: {json.dumps(result)}\n\n"
+                        
+                        # 2. 处理新的结构化事件格式
+                        if isinstance(result, dict):
+                            # 处理token类型的结果（消息内容）
+                            if result.get('type') == 'token' and result.get('content'):
+                                content = result['content']
+                                msg_id = str(id(result))  # 生成消息ID
+                                
+                                # 跳过已发送的消息
+                                if msg_id in sent_message_ids:
+                                    logger.debug(f"[Stream] Skipping duplicate message id={msg_id}")
+                                    continue
+                                
+                                # 累积内容
+                                accumulated_content += content
+                                
+                                # 发送message_delta事件
+                                yield stream_processor.log_sse_event('message_delta', {
+                                    'id': msg_id,
+                                    'content': content,
+                                    'accumulated_content': accumulated_content
+                                })
+                                
+                                # 标记为已发送
+                                sent_message_ids.add(msg_id)
                 elif stream_mode == "updates":
-                    yield stream_processor.process_update_chunk(namespace, chunk)
+                    result = stream_processor.process_update_chunk(namespace, chunk)
+                    # 确保result可以被JSON序列化
+                    result = stream_processor.ensure_serializable(result)
+                    
+                    # 保持原有格式输出（向后兼容）
+                    yield f"data: {json.dumps(result)}\n\n"
                 elif stream_mode == "custom":
-                    yield stream_processor.process_custom_chunk(namespace, chunk)
+                    result = stream_processor.process_custom_chunk(namespace, chunk)
+                    # 确保result可以被JSON序列化
+                    result = stream_processor.ensure_serializable(result)
+                    
+                    # 保持原有格式输出（向后兼容）
+                    yield f"data: {json.dumps(result)}\n\n"
                 else:
-                    yield stream_processor.process_unknown_chunk(namespace, chunk)
+                    result = stream_processor.process_unknown_chunk(namespace, chunk)
+                    # 确保result可以被JSON序列化
+                    result = stream_processor.ensure_serializable(result)
+                    
+                    # 保持原有格式输出（向后兼容）
+                    yield f"data: {json.dumps(result)}\n\n"
+
+            # 3. 流结束时发送message_complete事件
+            if accumulated_content:
+                yield stream_processor.log_sse_event('message_complete', {
+                    'content': accumulated_content,
+                    'chunk_count': chunk_count
+                })
+            
+            # 4. 发送完成标记
+            logger.debug(f"[SSE→Client] [DONE] - Stream completed, total chunks: {chunk_count}")
+            yield "data: [DONE]\n\n"
 
         except Exception as e:
             logger.error(f"Error in run_async: {str(e)}")
             traceback.print_exc()
+            
+            # 发送错误事件
+            yield stream_processor.log_sse_event('error', {
+                'error': str(e),
+                'message': 'An error occurred during streaming'
+            })
+            # 发送完成标记
+            logger.debug(f"[SSE→Client] [DONE] - Stream completed with error")
+            yield "data: [DONE]\n\n"
             raise
 
     async def invoke(self, goal: str) -> AsyncGenerator[Dict[str, Any], None]:
         """异步运行Agent(流式输出)- 兼容api.py中的调用"""
-        async for result in self.run_async(goal):
-            yield result
+        # 注意：此方法已过时，建议直接使用run_async获取SSE格式的输出
+        # 为了向后兼容，这里仍然返回字典格式
+        async for sse_message in self.run_async(goal):
+            # 解析SSE消息，提取数据部分
+            if sse_message.startswith('data: '):
+                data_part = sse_message[6:].strip()
+                if data_part != '[DONE]':
+                    try:
+                        data = json.loads(data_part)
+                        yield data
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse SSE message: {data_part}")
 
     async def get_conversation_history(self, user_id: str):
         """获取用户的所有对话线程"""

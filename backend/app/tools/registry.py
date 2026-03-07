@@ -110,12 +110,8 @@ class ToolRegistry:
         """Load MCP tools from the mcp_tools module"""
         try:
             from app.tools.mcp_tools import initialize_mcp_client
-            from langchain_mcp_adapters.tools import load_mcp_tools
             # Create MCP tool instances
             mcp_client = initialize_mcp_client()
-            # async with mcp_client.session('playwright') as session:
-            #     mcp_tools = await load_mcp_tools(session)
-                # mcp_tools = await mcp_client.get_tools()
             mcp_tools = await mcp_client.get_tools()
             # Register MCP tools
             for mcp_tool in mcp_tools:

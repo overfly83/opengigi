@@ -130,34 +130,19 @@ class MemoryMiddleware(AgentMiddleware):
             except Exception:
                 pass
             
-            # Get existing user data
-            existing_data = await self.sqlite_store.aget(
-                namespace=('memories', 'conversations'),
-                key=user_id
-            )
+            # Import storage functions
+            from app.agent import storage
             
-            if existing_data:
-                user_data = existing_data.value
-                threads = user_data.get('threads', [])
+            # Get existing thread
+            existing_thread = await storage.get_thread_history(self.sqlite_store, user_id, thread_id)
+            
+            if existing_thread:
+                # Update existing thread
+                existing_thread['date'] = date_str
+                existing_thread['messages'] = serialized_messages
+                existing_thread['updated_at'] = datetime.now().isoformat()
+                await storage.save_thread_history(self.sqlite_store, user_id, existing_thread)
             else:
-                user_data = {
-                    'user_id': user_id,
-                    'threads': []
-                }
-                threads = []
-            
-            # Find or create thread
-            thread_found = False
-            for thread in threads:
-                if thread.get('thread_id') == thread_id:
-                    # Update existing thread
-                    thread['date'] = date_str
-                    thread['messages'] = serialized_messages
-                    thread['updated_at'] = datetime.now().isoformat()
-                    thread_found = True
-                    break
-            
-            if not thread_found and thread_id:
                 # Create new thread
                 new_thread = {
                     'thread_id': thread_id,
@@ -165,18 +150,10 @@ class MemoryMiddleware(AgentMiddleware):
                     'messages': serialized_messages,
                     'updated_at': datetime.now().isoformat()
                 }
-                threads.append(new_thread)
-                user_data['threads'] = threads
-            
-            # Save to SqliteStore
-            await self.sqlite_store.aput(
-                namespace=('memories', 'conversations'),
-                key=user_id,
-                value=user_data
-            )
-            await self.sqlite_store.conn.commit()
+                await storage.save_thread_history(self.sqlite_store, user_id, new_thread)
+                await storage.add_thread_to_index(self.sqlite_store, user_id, thread_id)
             logger.info(f"Saved conversation history for user: {user_id}, thread: {thread_id}")
-            logger.debug(f"Conversation data: {json.dumps(user_data, ensure_ascii=False)}")
+            logger.debug(f"Conversation saved successfully")
             
         except Exception as e:
             logger.error(f"Error saving conversation history: {e}", exc_info=True)
