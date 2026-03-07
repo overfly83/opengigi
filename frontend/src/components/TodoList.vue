@@ -16,7 +16,7 @@
       </div>
     </div>
     
-    <div v-if="filteredTodos.length > 0" class="space-y-0.5">
+    <div v-if="filteredTodos.length > 0" class="space-y-1">
       <div
         v-for="(todo, index) in filteredTodos"
         :key="index"

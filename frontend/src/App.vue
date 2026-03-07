@@ -852,9 +852,14 @@ export default {
             content = aiContent || '(empty response)'
           }
           // 处理换行符
-          content = content.replace(/\\n/g, '\n')
-          // 去除多余的空白字符
-          content = content.trim()
+          if (typeof content === 'string') {
+            content = content.replace(/\n/g, '\n')
+            // 去除多余的空白字符
+            content = content.trim()
+          } else {
+            // 如果content不是字符串，转换为字符串
+            content = String(content)
+          }
         } else if (msg.type === 'tool') {
           type = MessageType.TOOL_RESULT
           // 确保 content 是字符串
@@ -966,9 +971,14 @@ export default {
             content = toolContent
           }
           // 处理换行符
-          content = content.replace(/\\n/g, '\n')
-          // 去除多余的空白字符
-          content = content.trim()
+          if (typeof content === 'string') {
+            content = content.replace(/\n/g, '\n')
+            // 去除多余的空白字符
+            content = content.trim()
+          } else {
+            // 如果content不是字符串，转换为字符串
+            content = String(content)
+          }
         }
         
         if (content) {
