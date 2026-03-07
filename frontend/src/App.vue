@@ -1003,13 +1003,13 @@ export default {
         // 处理工具类型消息，去除技术术语
         let formattedContent = content
         
-        // 去除开头的技术术语
+        // 去除开头的技术术语，支持单引号和双引号
         if (formattedContent.includes('Returning structured response:')) {
-          formattedContent = formattedContent.replace(/Returning structured response: phase='[^']+' result='/g, '')
+          formattedContent = formattedContent.replace(/Returning structured response: phase='[^']+' result=(["'])([^"]+)\1/g, '$2')
         }
         
-        // 去除结尾的技术术语
-        formattedContent = formattedContent.replace(/' is_simple_and_unrelevant=None is_completed=True todos=None/g, '')
+        // 去除结尾的技术术语，处理有空格的情况
+        formattedContent = formattedContent.replace(/\s*["']?\s*is_simple_and_unrelevant=None is_completed=True todos=None/g, '')
         
         return formattedContent
       }
