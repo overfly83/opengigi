@@ -39,13 +39,14 @@ async def initialize_sqlite_store() -> AsyncSqliteStore:
     conn = await aiosqlite.connect(MEMORIES_PATH, check_same_thread=False)
     store = AsyncSqliteStore(conn)
     await store.setup()
+    await commit_transaction(store)
     logger.info(f"Initialized SQLite store at: {MEMORIES_PATH}")
     return store
 
 
 async def initialize_user_preferences(sqlite_store: AsyncSqliteStore) -> None:
     """初始化用户偏好数据"""
-    try:
+    try:    
         existing = await sqlite_store.aget(
             namespace=PREFERENCES_NAMESPACE,
             key='settings'

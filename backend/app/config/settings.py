@@ -4,7 +4,7 @@ import yaml
 from typing import Dict, Optional, Any
 
 # Load environment variables
-dotenv.load_dotenv()
+dotenv.load_dotenv(override=True)
 
 
 class Settings:
@@ -24,7 +24,7 @@ class Settings:
         self.model_config = self._load_model_config()
         
         # Derive model settings from config
-        self.OPENAI_API_KEY = self.model_config.get("api_key", os.getenv("OPENAI_API_KEY"))
+        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         self.BASE_URL = self.model_config.get("base_url", os.getenv("BASE_URL"))
         self.MODEL_NAME = self.model_config.get("model_name", os.getenv("MODEL_NAME"))
         self.MODEL_TEMPERATURE = float(self.model_config.get("model_temperature", os.getenv("MODEL_TEMPERATURE", "0.3")))

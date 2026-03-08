@@ -1,0 +1,136 @@
+/* 全局样式 */
+
+/* 深色模式样式 */
+.dark {
+  background-color: #1a1a2e;
+  color: #e2e8f0;
+}
+
+.dark .card {
+  background-color: #16213e;
+  border-color: #0f3460;
+  color: #e2e8f0;
+}
+
+.dark .bg-gray-50 {
+  background-color: #0f3460;
+  color: #e2e8f0;
+}
+
+.dark .bg-blue-50 {
+  background-color: #1a365d;
+  color: #e2e8f0;
+}
+
+.dark .bg-green-50 {
+  background-color: #22543d;
+  color: #e2e8f0;
+}
+
+.dark .bg-red-50 {
+  background-color: #742a2a;
+  color: #e2e8f0;
+}
+
+.dark .bg-gray-100 {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .bg-purple-50 {
+  background-color: #4c1d95;
+  color: #e2e8f0;
+}
+
+.dark .bg-indigo-50 {
+  background-color: #312e81;
+  color: #e2e8f0;
+}
+
+.dark .text-purple-500 {
+  color: #a855f7;
+}
+
+.dark .text-indigo-500 {
+  color: #6366f1;
+}
+
+.dark .bg-teal-50 {
+  background-color: #0d9488;
+  color: #e2e8f0;
+}
+
+.dark .text-teal-500 {
+  color: #2dd4bf;
+}
+
+.dark .border-gray-300 {
+  border-color: #475569;
+}
+
+.dark .text-gray-500 {
+  color: #94a3b8;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1;
+}
+
+.dark .text-gray-800 {
+  color: #f8fafc;
+}
+
+.dark .btn-primary {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.dark .btn-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.dark .btn {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.dark .btn:hover {
+  background-color: #334155;
+  border-color: #64748b;
+}
+
+.dark input[type="text"],
+.dark textarea,
+.dark select {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.dark input[type="text"]:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #334155;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #475569;
+}
+
+.dark .hover\:border-blue-600:hover {
+  border-color: #3b82f6;
+}
+
+/* 深色模式下的设置对话框 */
+.dark .bg-white {
+  background-color: #16213e;
+  color: #e2e8f0;
+}

@@ -282,6 +282,14 @@ import SettingsDialog from './components/SettingsDialog.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
 import { MessageType, MessageIcon, getMessageColor, getMessageBgColor, normalizeMessageType } from './utils/messageTypes'
+import { saveHistory, loadHistory, createHistoryItem } from './utils/HistoryManager'
+import { generateUuid, startNewConversation, handleLoadThread, handleThreadDeleted } from './utils/SessionManager'
+import { loadSettings, handleSettingsSave, updateSidebarWidth as updateSidebarWidthUtil } from './utils/SettingsManager'
+import { processContentForTodos, updateTodoListOnCompletion } from './utils/TodoManager'
+import { scrollToBottom, startResize as startResizeUtil, stopResize as stopResizeUtil, formatMessageContent } from './utils/UIManager'
+
+// 导入全局样式
+import './assets/styles/global.css'
 
 export default {
   name: 'App',
@@ -293,10 +301,10 @@ export default {
   },
   mounted() {
     // 生成sessionUuid
-    this.sessionUuid = this.generateUuid()
+    this.sessionUuid = generateUuid()
     // 加载设置和历史记录
     this.loadSettings()
-    this.loadHistory()
+    this.history = loadHistory()
   },
   data() {
     return {
@@ -332,6 +340,7 @@ export default {
   methods: {
     getMessageColor,
     getMessageBgColor,
+    formatMessageContent,
     startAgent() {
       if (!this.goal.trim()) return
       
@@ -352,13 +361,6 @@ export default {
       }
     },
     
-    scrollToBottom() {
-      const container = document.querySelector('.process-container')
-      if (container) {
-        container.scrollTop = container.scrollHeight
-      }
-    },
-    
     addLog(type, content) {
       const normalizedType = normalizeMessageType(type)
       // 处理换行符，确保\n被转换为\n
@@ -366,157 +368,10 @@ export default {
       const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false })
       this.processLogs.push({ type: normalizedType, content: processedContent, timestamp })
       this.$nextTick(() => {
-        this.scrollToBottom()
+        scrollToBottom()
       })
     },
     
-    processContentForTodos(content) {
-      if (content.includes('Returning structured response:')) {
-        const structuredStart = content.indexOf('Returning structured response:') + 'Returning structured response:'.length
-        let structuredContent = content.substring(structuredStart).trim()
-        
-        try {
-          if (structuredContent.includes('result=')) {
-            const resultStart = structuredContent.indexOf('result=') + 'result='.length
-            let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
-            if (resultEnd === -1) {
-              resultEnd = structuredContent.indexOf(' is_completed=')
-            }
-            if (resultEnd !== -1) {
-              let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
-              if (resultStr.startsWith('\'')) {
-                resultStr = resultStr.substring(1)
-              }
-              if (resultStr.endsWith('\'')) {
-                resultStr = resultStr.substring(0, resultStr.length - 1)
-              }
-              return resultStr.replace(/\\n/g, '\n')
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse structured response:', e)
-        }
-        
-        return structuredContent
-      }
-      
-      if (content.includes('Updated todo list to ')) {
-        const startIdx = content.indexOf('Updated todo list to ') + 'Updated todo list to '.length
-        let bracketCount = 0
-        let endIdx = startIdx
-        for (let i = startIdx; i < content.length; i++) {
-          if (content[i] === '[') {
-            bracketCount++
-          } else if (content[i] === ']') {
-            bracketCount--
-            if (bracketCount === 0) {
-              endIdx = i + 1
-              break
-            }
-          }
-        }
-        const todoListStr = content.substring(startIdx, endIdx)
-        try {
-          const validJsonStr = todoListStr.replace(/'/g, '"')
-          const todos = JSON.parse(validJsonStr)
-          this.todos = todos
-          // 更新进度
-          if (todos.length > 0) {
-            const completedCount = todos.filter(todo => todo.status === 'completed').length
-            this.progress = (completedCount / todos.length) * 100
-          }
-        } catch (error) {
-          console.error('Failed to parse todo list:', error)
-        }
-        
-        // 返回剩余的内容，而不是空字符串
-        const remainingContent = content.substring(endIdx).trim()
-        return remainingContent
-      }
-      
-      const lines = content.split('\n')
-      const filteredLines = lines.filter(line => {
-        if (/^\s*\d+\s*\./.test(line)) {
-          return false
-        }
-        if (line.trim().startsWith('`') && line.trim().endsWith('`')) {
-          return false
-        }
-        if (!line.trim()) {
-          return false
-        }
-        return true
-      })
-      
-      const filteredContent = filteredLines.join('\n').trim()
-      return filteredContent
-    },
-
-    updateTodoListOnCompletion() {
-      if (!this.todos || this.todos.length === 0) {
-        return
-      }
-      
-      let lastInProgressIndex = -1
-      for (let i = this.todos.length - 1; i >= 0; i--) {
-        if (this.todos[i].status === 'in_progress') {
-          lastInProgressIndex = i
-          break
-        }
-      }
-      
-      if (lastInProgressIndex !== -1) {
-          const updatedTodos = [...this.todos]
-          updatedTodos[lastInProgressIndex].status = 'completed'
-          
-          if (lastInProgressIndex < updatedTodos.length - 1) {
-            for (let i = lastInProgressIndex + 1; i < updatedTodos.length; i++) {
-              updatedTodos[i].status = 'skipped'
-            }
-          }
-          
-          this.todos = updatedTodos
-          // 更新进度
-          const completedCount = updatedTodos.filter(todo => todo.status === 'completed').length
-          this.progress = (completedCount / updatedTodos.length) * 100
-        }
-    },
-
-    startResize(type, event) {
-      this.isResizing = true
-      this.resizeType = type
-      this.startX = event.clientX
-      
-      document.addEventListener('mousemove', this.resize)
-      document.addEventListener('mouseup', this.stopResize)
-      
-      event.preventDefault()
-    },
-
-    resize(event) {
-      if (!this.isResizing) return
-      
-      const deltaX = event.clientX - this.startX
-      
-      if (this.resizeType === 'sidebar') {
-        let newWidth = this.sidebarWidth + deltaX
-        newWidth = Math.max(200, newWidth)
-        
-        const containerWidth = document.getElementById('main-container').offsetWidth
-        newWidth = Math.min(containerWidth * 0.5, newWidth)
-        
-        this.sidebarWidth = newWidth
-        this.startX = event.clientX
-      }
-    },
-
-    stopResize() {
-      this.isResizing = false
-      this.resizeType = null
-      document.removeEventListener('mousemove', this.resize)
-      document.removeEventListener('mouseup', this.stopResize)
-    },
-
     startStreamingMode() {
       const streamHandler = new StreamHandler(this)
       streamHandler.startStreamingMode()
@@ -549,15 +404,15 @@ export default {
             }
           }
           
-          this.updateTodoListOnCompletion()
+          updateTodoListOnCompletion(this)
           this.isRunning = false
           this.agentStatus = null // 清除状态
-          this.saveHistory() // 保存执行历史
+          saveHistory(this) // 保存执行历史
         } else {
           this.addLog(MessageType.ERROR, '执行失败: ' + response.data.message)
           this.isRunning = false
           this.agentStatus = null // 清除状态
-          this.saveHistory() // 保存执行历史
+          saveHistory(this) // 保存执行历史
         }
       })
       .catch(error => {
@@ -565,161 +420,10 @@ export default {
         this.addLog(MessageType.ERROR, '执行失败，请重试')
         this.isRunning = false
         this.agentStatus = null // 清除状态
-        this.saveHistory() // 保存执行历史
+        saveHistory(this) // 保存执行历史
       })
     },
-
-    processContentForTodos(content) {
-      if (content.includes('Returning structured response:')) {
-        const structuredStart = content.indexOf('Returning structured response:') + 'Returning structured response:'.length
-        let structuredContent = content.substring(structuredStart).trim()
-        
-        try {
-          if (structuredContent.includes('result=')) {
-            const resultStart = structuredContent.indexOf('result=') + 'result='.length
-            let resultEnd = structuredContent.indexOf(' is_simple_and_unrelevant=')
-            if (resultEnd === -1) {
-              resultEnd = structuredContent.indexOf(' is_completed=')
-            }
-            if (resultEnd !== -1) {
-              let resultStr = structuredContent.substring(resultStart, resultEnd).trim()
-              if (resultStr.startsWith('\'')) {
-                resultStr = resultStr.substring(1)
-              }
-              if (resultStr.endsWith('\'')) {
-                resultStr = resultStr.substring(0, resultStr.length - 1)
-              }
-              return resultStr.replace(/\\n/g, '\n')
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse structured response:', e)
-        }
-        
-        return structuredContent
-      }
-      
-      if (content.includes('Updated todo list to ')) {
-        const startIdx = content.indexOf('Updated todo list to ') + 'Updated todo list to '.length
-        let bracketCount = 0
-        let endIdx = startIdx
-        for (let i = startIdx; i < content.length; i++) {
-          if (content[i] === '[') {
-            bracketCount++
-          } else if (content[i] === ']') {
-            bracketCount--
-            if (bracketCount === 0) {
-              endIdx = i + 1
-              break
-            }
-          }
-        }
-        const todoListStr = content.substring(startIdx, endIdx)
-        try {
-          const validJsonStr = todoListStr.replace(/'/g, '"')
-          const todos = JSON.parse(validJsonStr)
-          this.todos = todos
-          // 更新进度
-          if (todos.length > 0) {
-            const completedCount = todos.filter(todo => todo.status === 'completed').length
-            this.progress = (completedCount / todos.length) * 100
-          }
-        } catch (error) {
-          console.error('Failed to parse todo list:', error)
-        }
-        
-        const remainingContent = content.substring(endIdx).trim()
-        return remainingContent
-      }
-      
-      const lines = content.split('\n')
-      const filteredLines = lines.filter(line => {
-        if (/^\s*\d+\s*\./.test(line)) {
-          return false
-        }
-        if (line.trim().startsWith('`') && line.trim().endsWith('`')) {
-          return false
-        }
-        if (!line.trim()) {
-          return false
-        }
-        return true
-      })
-      
-      const filteredContent = filteredLines.join('\n').trim()
-      return filteredContent
-    },
-
-    updateSidebarWidth(width) {
-      this.sidebarWidth = width
-    },
-    handleSettingsSave(settings) {
-      // 处理设置保存事件
-      this.sidebarWidth = settings.sidebarWidth
-    },
-    loadSettings() {
-      // 从本地存储加载设置
-      const savedSettings = localStorage.getItem('appSettings')
-      if (savedSettings) {
-        this.settings = { ...this.settings, ...JSON.parse(savedSettings) }
-        this.sidebarWidth = this.settings.sidebarWidth
-        // 应用主题
-        if (this.settings.theme === 'dark') {
-          document.documentElement.classList.add('dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-        }
-        // 应用字体大小
-        document.documentElement.classList.remove('text-sm', 'text-base', 'text-lg')
-        switch (this.settings.fontSize) {
-          case 'small':
-            document.documentElement.classList.add('text-sm')
-            break
-          case 'large':
-            document.documentElement.classList.add('text-lg')
-            break
-          default:
-            document.documentElement.classList.add('text-base')
-        }
-      }
-    },
-    saveHistory() {
-      // 保存历史记录到本地存储
-      const historyItem = {
-        id: Date.now(),
-        goal: this.goal,
-        mode: this.mode,
-        todos: [...this.todos],
-        timestamp: new Date().toLocaleString(),
-        status: this.todos.length > 0 ? 
-          this.todos.every(todo => todo.status === 'completed') ? 'Completed' : 'Partial' : 'No Tasks'
-      }
-      
-      // 从本地存储加载现有历史记录
-      const existingHistory = localStorage.getItem('appHistory')
-      let history = existingHistory ? JSON.parse(existingHistory) : []
-      
-      // 添加新的历史记录项
-      history.unshift(historyItem)
-      
-      // 限制历史记录数量为最近10条
-      if (history.length > 10) {
-        history = history.slice(0, 10)
-      }
-      
-      // 保存到本地存储
-      localStorage.setItem('appHistory', JSON.stringify(history))
-      
-      // 更新当前历史记录列表
-      this.history = history
-    },
-    loadHistory() {
-      // 从本地存储加载历史记录
-      const savedHistory = localStorage.getItem('appHistory')
-      if (savedHistory) {
-        this.history = JSON.parse(savedHistory)
-      }
-    },
+    
     loadHistoryItem(item) {
       // 加载历史记录项到当前界面
       this.goal = item.goal
@@ -727,305 +431,30 @@ export default {
       this.todos = [...item.todos]
       this.showHistory = false
     },
-    generateUuid() {
-      // 生成唯一的UUID
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0
-        const v = c === 'x' ? r : (r & 0x3 | 0x8)
-        return v.toString(16)
-      })
-    },
     
+    // 委托给工具类的方法
     startNewConversation() {
-      // 开始新对话
-      this.sessionUuid = this.generateUuid()
-      this.goal = ''
-      this.processLogs = []
-      this.todos = []
-      this.agentStatus = null
-      this.progress = 0
+      startNewConversation(this)
     },
     
     handleLoadThread(thread) {
-      // 加载历史对话
-      this.sessionUuid = thread.thread_id
-      
-      // 清空当前状态
-      this.goal = ''
-      this.processLogs = []
-      this.todos = []
-      this.agentStatus = null
-      this.progress = 0
-      
-      // 显示历史对话消息
-      this.addLog('system', `Loaded conversation from ${thread.date}`)
-      
-      // 添加历史消息到 processLogs
-      thread.messages.forEach(msg => {
-        let type = 'system'
-        let content = ''
-        
-        if (msg.type === 'human') {
-          type = MessageType.HUMAN
-          content = msg.content
-        } else if (msg.type === 'ai') {
-          type = MessageType.AI
-          // 确保 content 是字符串
-          let aiContent = msg.content
-          if (typeof aiContent === 'object' && aiContent !== null) {
-            // 检查是否是工具调用
-            if (aiContent.type === 'tool_call' && aiContent.args) {
-              // 提取工具调用信息
-              if (aiContent.args.result) {
-                // 直接使用结果
-                content = aiContent.args.result
-              } else {
-                // 提取工具调用信息
-                const toolName = aiContent.name || aiContent.type
-                const args = JSON.stringify(aiContent.args)
-                content = `${toolName} - ${args}`
-              }
-            } else if (aiContent.phase && aiContent.result) {
-              // 提取结构化结果
-              content = aiContent.result
-            } else if (aiContent.result) {
-              // 提取结果
-              content = aiContent.result
-            } else {
-              // 其他情况，尝试转换为字符串并解析
-              try {
-                const contentStr = JSON.stringify(aiContent)
-                const parsed = JSON.parse(contentStr)
-                if (parsed.args && parsed.args.result) {
-                  content = parsed.args.result
-                } else if (parsed.result) {
-                  content = parsed.result
-                } else {
-                  content = contentStr
-                }
-              } catch (e) {
-                content = String(aiContent)
-              }
-            }
-          } else if (typeof aiContent === 'string') {
-            // 字符串类型，尝试解析为JSON
-            try {
-              const parsed = JSON.parse(aiContent)
-              if (parsed.args && parsed.args.result) {
-                content = parsed.args.result
-              } else if (parsed.result) {
-                content = parsed.result
-              } else if (parsed.type === 'tool_call' && parsed.args) {
-                if (parsed.args.result) {
-                  content = parsed.args.result
-                } else {
-                  const toolName = parsed.name || parsed.type
-                  const args = JSON.stringify(parsed.args)
-                  content = `${toolName} - ${args}`
-                }
-              } else {
-                content = aiContent
-              }
-            } catch (e) {
-              // 不是JSON字符串，尝试提取result
-              if (aiContent.includes('Returning structured response:')) {
-                const structuredStart = aiContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
-                let structuredContent = aiContent.substring(structuredStart).trim()
-                
-                // 尝试提取result值
-                const resultMatch = structuredContent.match(/result='([^']+)'/)
-                if (resultMatch && resultMatch[1]) {
-                  content = resultMatch[1]
-                } else {
-                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
-                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
-                    content = resultMatchDoubleQuote[1]
-                  } else {
-                    content = structuredContent
-                  }
-                }
-              } else {
-                content = aiContent
-              }
-            }
-          } else {
-            content = aiContent || '(empty response)'
-          }
-          // 处理换行符
-          if (typeof content === 'string') {
-            content = content.replace(/\n/g, '\n')
-            // 去除多余的空白字符
-            content = content.trim()
-          } else {
-            // 如果content不是字符串，转换为字符串
-            content = String(content)
-          }
-        } else if (msg.type === 'tool') {
-          type = MessageType.TOOL_RESULT
-          // 确保 content 是字符串
-          let toolContent = msg.content
-          if (typeof toolContent === 'object' && toolContent !== null) {
-            // 检查是否是结构化响应
-            if (typeof toolContent === 'string' && toolContent.includes('Returning structured response:')) {
-              // 提取结果部分
-              const structuredStart = toolContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
-              let structuredContent = toolContent.substring(structuredStart).trim()
-              
-              // 尝试解析为JSON
-              try {
-                // 尝试将structuredContent转换为有效的JSON
-                const jsonStr = structuredContent.replace(/'/g, '"')
-                const parsed = JSON.parse(jsonStr)
-                if (parsed.result) {
-                  content = parsed.result
-                } else {
-                  // 尝试提取result值
-                  const resultMatch = structuredContent.match(/result='([^']+)'/)
-                  if (resultMatch && resultMatch[1]) {
-                    content = resultMatch[1]
-                  } else {
-                    const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
-                    if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
-                      content = resultMatchDoubleQuote[1]
-                    } else {
-                      content = structuredContent
-                    }
-                  }
-                }
-              } catch (e) {
-                // 解析失败，尝试提取result值
-                const resultMatch = structuredContent.match(/result='([^']+)'/)
-                if (resultMatch && resultMatch[1]) {
-                  content = resultMatch[1]
-                } else {
-                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
-                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
-                    content = resultMatchDoubleQuote[1]
-                  } else {
-                    content = structuredContent
-                  }
-                }
-              }
-            } else if (toolContent.status === 'success' && toolContent.current) {
-              // 天气工具结果
-              const location = toolContent.location.name || '未知位置'
-              const current = toolContent.current
-              content = `${location}当前天气：\n`
-              if (current.temp) content += `温度：${current.temp}°C\n`
-              if (current.condition && current.condition.text) content += `天气：${current.condition.text}\n`
-              if (current.wind_kph) content += `风力：${current.wind_kph} km/h\n`
-              if (current.humidity) content += `湿度：${current.humidity}%\n`
-              if (current.air_quality && current.air_quality.us_epa_index) {
-                const airQuality = current.air_quality.us_epa_index
-                content += `空气质量：${airQuality === 1 ? '优' : airQuality === 2 ? '良' : airQuality === 3 ? '轻度污染' : airQuality === 4 ? '中度污染' : airQuality === 5 ? '重度污染' : '严重污染'}\n`
-              }
-            } else {
-              // 其他工具结果，尝试解析为JSON
-              try {
-                const contentStr = JSON.stringify(toolContent)
-                const parsed = JSON.parse(contentStr)
-                if (parsed.result) {
-                  content = parsed.result
-                } else if (parsed.args && parsed.args.result) {
-                  content = parsed.args.result
-                } else {
-                  content = contentStr
-                }
-              } catch (e) {
-                content = String(toolContent)
-              }
-            }
-          } else if (typeof toolContent === 'string') {
-            // 字符串类型，尝试解析为JSON
-            try {
-              const parsed = JSON.parse(toolContent)
-              if (parsed.result) {
-                content = parsed.result
-              } else if (parsed.args && parsed.args.result) {
-                content = parsed.args.result
-              } else if (toolContent.includes('Returning structured response:')) {
-                // 提取结果部分
-                const structuredStart = toolContent.indexOf('Returning structured response:') + 'Returning structured response:'.length
-                let structuredContent = toolContent.substring(structuredStart).trim()
-                
-                // 尝试提取result值
-                const resultMatch = structuredContent.match(/result='([^']+)'/)
-                if (resultMatch && resultMatch[1]) {
-                  content = resultMatch[1]
-                } else {
-                  const resultMatchDoubleQuote = structuredContent.match(/result="([^"]+)"/)
-                  if (resultMatchDoubleQuote && resultMatchDoubleQuote[1]) {
-                    content = resultMatchDoubleQuote[1]
-                  } else {
-                    content = structuredContent
-                  }
-                }
-              } else {
-                content = toolContent
-              }
-            } catch (e) {
-              // 不是JSON字符串，直接使用
-              content = toolContent
-            }
-          } else {
-            content = toolContent
-          }
-          // 处理换行符
-          if (typeof content === 'string') {
-            content = content.replace(/\n/g, '\n')
-            // 去除多余的空白字符
-            content = content.trim()
-          } else {
-            // 如果content不是字符串，转换为字符串
-            content = String(content)
-          }
-        }
-        
-        if (content) {
-          const normalizedType = normalizeMessageType(type)
-          const timestamp = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
-          const logItem = {
-            type: normalizedType,
-            content: this.formatMessageContent(normalizedType, content),
-            timestamp
-          }
-          // 添加tool_name字段（如果有）
-          if (msg.name) {
-            logItem.tool_name = msg.name
-          }
-          this.processLogs.push(logItem)
-        }
-      })
-      
-      this.$nextTick(() => {
-        this.scrollToBottom()
-      })
+      handleLoadThread(this, thread)
     },
     
     handleThreadDeleted(deletedThreadId) {
-      // If the deleted thread was the active one, start a new conversation
-      if (deletedThreadId === this.sessionUuid) {
-        this.startNewConversation()
-      }
+      handleThreadDeleted(this, deletedThreadId)
     },
     
-    formatMessageContent(type, content) {
-      if (type === MessageType.TOOL_RESULT) {
-        // 处理工具类型消息，去除技术术语
-        let formattedContent = content
-        
-        // 去除开头的技术术语，支持单引号和双引号
-        if (formattedContent.includes('Returning structured response:')) {
-          formattedContent = formattedContent.replace(/Returning structured response: phase='[^']+' result=(["'])([^"]+)\1/g, '$2')
-        }
-        
-        // 去除结尾的技术术语，处理有空格的情况
-        formattedContent = formattedContent.replace(/\s*["']?\s*is_simple_and_unrelevant=None is_completed=True todos=None/g, '')
-        
-        return formattedContent
-      }
-      // 对于人类和AI类型消息，直接返回内容
-      return content
+    updateSidebarWidth(width) {
+      updateSidebarWidthUtil(this, width)
+    },
+    
+    handleSettingsSave(settings) {
+      handleSettingsSave(this, settings)
+    },
+    
+    loadSettings() {
+      loadSettings(this)
     }
   }
 }
@@ -1036,288 +465,10 @@ export default {
   max-height: 800px;
   overflow-y: auto;
 }
-
-.resize-handle {
-  width: 8px;
-  cursor: col-resize;
-  background-color: #cbd5e1;
-  transition: background-color 0.3s;
-}
-
-.resize-handle:hover {
-  background-color: #94a3b8;
-}
-
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.btn-primary {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #2563eb;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>
 
 <style>
-/* 深色模式样式 */
-.dark {
-  background-color: #1a1a2e;
-  color: #e2e8f0;
-}
-
-.dark .card {
-  background-color: #16213e;
-  border-color: #0f3460;
-  color: #e2e8f0;
-}
-
-.dark .bg-gray-50 {
-  background-color: #0f3460;
-  color: #e2e8f0;
-}
-
-.dark .bg-blue-50 {
-  background-color: #1a365d;
-  color: #e2e8f0;
-}
-
-.dark .bg-green-50 {
-  background-color: #22543d;
-  color: #e2e8f0;
-}
-
-.dark .bg-red-50 {
-  background-color: #742a2a;
-  color: #e2e8f0;
-}
-
-.dark .bg-gray-100 {
-  background-color: #1e293b;
-  color: #e2e8f0;
-}
-
-.dark .bg-purple-50 {
-  background-color: #4c1d95;
-  color: #e2e8f0;
-}
-
-.dark .bg-indigo-50 {
-  background-color: #312e81;
-  color: #e2e8f0;
-}
-
-.dark .text-purple-500 {
-  color: #a855f7;
-}
-
-.dark .text-indigo-500 {
-  color: #6366f1;
-}
-
-.dark .bg-teal-50 {
-  background-color: #0d9488;
-  color: #e2e8f0;
-}
-
-.dark .text-teal-500 {
-  color: #2dd4bf;
-}
-
-.dark .border-gray-300 {
-  border-color: #475569;
-}
-
-.dark .text-gray-500 {
-  color: #94a3b8;
-}
-
-.dark .text-gray-700 {
-  color: #cbd5e1;
-}
-
-.dark .text-gray-800 {
-  color: #f8fafc;
-}
-
-.dark .btn-primary {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
-}
-
-.dark .btn-primary:hover {
-  background-color: #2563eb;
-  border-color: #2563eb;
-}
-
-.dark .btn {
-  background-color: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-.dark .btn:hover {
-  background-color: #334155;
-  border-color: #64748b;
-}
-
-.dark input[type="text"],
-.dark textarea,
-.dark select {
-  background-color: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
-}
-
-.dark input[type="text"]:focus,
-.dark textarea:focus,
-.dark select:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.dark .hover\:bg-gray-50:hover {
-  background-color: #334155;
-}
-
-.dark .hover\:bg-gray-100:hover {
-  background-color: #475569;
-}
-
-.dark .hover\:border-blue-600:hover {
-  border-color: #3b82f6;
-}
-
-/* 深色模式下的设置对话框 */
-.dark .bg-white {
-  background-color: #16213e;
-  color: #e2e8f0;
-}
-
-.dark .text-gray-400 {
-  color: #94a3b8;
-}
-
-.dark .text-gray-400:hover {
-  color: #cbd5e1;
-}
-
-.dark .border-gray-300 {
-  border-color: #475569;
-}
-
-.dark .bg-blue-50 {
-  background-color: #1a365d;
-  border-color: #3b82f6;
-  color: #bfdbfe;
-}
-
-.dark .bg-gray-800 {
-  background-color: #0f172a;
-  border-color: #334155;
-  color: #e2e8f0;
-}
-
-.dark .text-blue-600 {
-  color: #3b82f6;
-}
-
-.dark .bg-blue-600 {
-  background-color: #3b82f6;
-  color: #ffffff;
-}
-
-.dark .bg-blue-600:hover {
-  background-color: #2563eb;
-}
-
-.dark .text-white {
-  color: #ffffff;
-}
-
-/* 深色模式下的记忆模块 */
-.dark .bg-gradient-to-br {
-  background-image: linear-gradient(to bottom right, #1a365d, #1e3a8a);
-}
-
-.dark .border-blue-100 {
-  border-color: #1e40af;
-}
-
-.dark .bg-white {
-  background-color: #1e293b;
-  border-color: #334155;
-}
-
-.dark .text-blue-500 {
-  color: #60a5fa;
-}
-
-.dark .text-purple-500 {
-  color: #a78bfa;
-}
-
-.dark .text-green-500 {
-  color: #34d399;
-}
-
-.dark .text-orange-500 {
-  color: #f97316;
-}
-
-.dark .bg-gray-100 {
-  background-color: #334155;
-  color: #e2e8f0;
-}
-
-.dark .bg-gray-100:hover {
-  background-color: #475569;
-}
-
-/* 深色模式下的页眉页脚 */
-.dark .bg-gradient-to-r {
-  background-image: linear-gradient(to right, #16213e, #0f3460);
-}
-
-.dark .text-white {
-  color: #ffffff;
-}
-
-.dark .text-gray-300 {
-  color: #cbd5e1;
-}
-
-.dark .text-gray-300:hover {
-  color: #ffffff;
-}
-
-.dark .border-b {
-  border-color: #334155;
-}
-
-.dark .border-t {
-  border-color: #334155;
-}
+/* 导入共享样式 */
+@import './assets/styles/shared.css';
 </style>
+

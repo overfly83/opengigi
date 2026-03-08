@@ -4,6 +4,28 @@ rem Set project root directory
 set "PROJECT_ROOT=%~dp0"
 set "VENV_DIR=%PROJECT_ROOT%backend\venv"
 
+chcp 65001 >nul 2>&1
+set "CLASH_PROXY_PORT=7897"
+set "PROXY_URL=http://127.0.0.1:%CLASH_PROXY_PORT%"
+set "PROXY_AVAILABLE=0"
+
+echo ==============================================
+echo Checking for Clash proxy at port %CLASH_PROXY_PORT%...
+echo ==============================================
+
+netstat -ano | findstr ":%CLASH_PROXY_PORT%" | findstr "LISTENING" >nul 2>&1
+
+if %errorlevel% equ 0 (
+    set "PROXY_AVAILABLE=1"
+    echo Clash proxy detected, will use it for installation
+    set "HTTP_PROXY=%PROXY_URL%"
+    set "HTTPS_PROXY=%PROXY_URL%"
+    set "http_proxy=%PROXY_URL%"
+    set "https_proxy=%PROXY_URL%"
+) else (
+    echo Clash proxy not detected, proceeding without proxy
+)
+
 rem Check if Python is installed
 echo Checking Python installation...
 python --version >nul 2>&1

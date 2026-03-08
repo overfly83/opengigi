@@ -221,4 +221,22 @@ export default {
 .memory-component p {
   line-height: 1.2;
 }
+
+
+
+/* 减小对话历史项内部元素的间距 */
+.memory-component .group > div {
+  padding: 0.7rem; /* 减小内边距 */
+}
+
+/* 减小字体大小 */
+.memory-component .group h4 {
+  font-size: 0.75rem; /* 减小标题字体大小 */
+  line-height: 1.1; /* 减小行高 */
+}
+
+.memory-component .group .text-\[10px\] {
+  font-size: 0.65rem; /* 减小元数据字体大小 */
+  line-height: 1.1; /* 减小行高 */
+}
 </style>

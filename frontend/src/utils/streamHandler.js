@@ -1,6 +1,9 @@
 import axios from 'axios'
 import { ChunkCacheManager } from './chunkCacheManager'
 import { MessageType, normalizeMessageType } from './messageTypes'
+import { processContentForTodos, updateTodoListOnCompletion } from './TodoManager'
+import { saveHistory } from './HistoryManager'
+import { scrollToBottom } from './UIManager'
 
 export class StreamHandler {
   constructor(app) {
@@ -81,7 +84,7 @@ export class StreamHandler {
       this.addMessage(MessageType.SYSTEM, this.jsonBuffer, 'done', 'done')
     }
 
-    this.app.updateTodoListOnCompletion()
+    updateTodoListOnCompletion(this.app)
 
     const finalResult = this.extractFinalResult()
     
@@ -95,7 +98,7 @@ export class StreamHandler {
     }
 
     // 保存执行历史
-    this.app.saveHistory()
+    saveHistory(this.app)
   }
 
   extractFinalResult() {
@@ -175,7 +178,7 @@ export class StreamHandler {
   _handleAiMessage(data) {
     if (!data.content) return
 
-    let processedContent = this.app.processContentForTodos(data.content)
+    let processedContent = processContentForTodos(this.app, data.content)
     if (!processedContent) return
 
     if (data.content.includes('Updated todo list to ')) {
@@ -202,7 +205,7 @@ export class StreamHandler {
     if (data.data && data.data.model && data.data.model.structured_response) {
       const structuredResponse = data.data.model.structured_response
       if (structuredResponse.result) {
-        let processedContent = this.app.processContentForTodos(structuredResponse.result)
+        let processedContent = processContentForTodos(this.app, structuredResponse.result)
         if (processedContent) {
           this.addMessage(MessageType.AI, `主Agent (${data.namespace}): ${processedContent}`, data.source, data.namespace)
         }
@@ -212,7 +215,7 @@ export class StreamHandler {
     if (data.data && data.data.model && data.data.model.messages) {
       data.data.model.messages.forEach(message => {
         if (message.content) {
-          let processedContent = this.app.processContentForTodos(message.content)
+          let processedContent = processContentForTodos(this.app, message.content)
           if (processedContent) {
             if (message.content.includes('Returning structured response:')) {
               const structuredStart = message.content.indexOf('Returning structured response:') + 'Returning structured response:'.length
@@ -232,7 +235,7 @@ export class StreamHandler {
                   if (resultStr.endsWith('\'')) {
                     resultStr = resultStr.substring(0, resultStr.length - 1)
                   }
-                  let processedResult = this.app.processContentForTodos(resultStr)
+                  let processedResult = processContentForTodos(this.app, resultStr)
                   if (processedResult) {
                     this.addMessage(MessageType.TOOL_RESULT, `${processedResult}`, data.source, data.namespace)
                   }
@@ -251,7 +254,7 @@ export class StreamHandler {
     if (data.data && data.data.tools && data.data.tools.messages) {
       data.data.tools.messages.forEach(message => {
         if (message.content) {
-          let processedContent = this.app.processContentForTodos(message.content)
+          let processedContent = processContentForTodos(this.app, message.content)
           if (processedContent) {
             this.addMessage(MessageType.TOOL_RESULT, `工具 (${data.namespace}): ${processedContent}`, data.source, data.namespace)
           }
@@ -296,7 +299,7 @@ export class StreamHandler {
     // 使用app的addLog方法添加消息
     this.app.processLogs.push(logItem)
     this.app.$nextTick(() => {
-      this.app.scrollToBottom()
+      scrollToBottom()
     })
     this.app.currentStream = {
       source: source,
@@ -316,7 +319,7 @@ export class StreamHandler {
   // 处理结构化SSE事件
   handleMessageDelta(data) {
     if (data.content) {
-      let processedContent = this.app.processContentForTodos(data.content)
+      let processedContent = processContentForTodos(this.app, data.content)
       if (!processedContent) return
 
       // 直接添加消息，使用AI类型
