@@ -13,7 +13,7 @@ call venv\Scripts\activate
 
 REM 启动后端API服务（在新窗口）
 echo 启动后端API服务...
-start "Backend API" cmd /k "uvicorn api:app --host 0.0.0.0 --port 8000 --reload"
+start "Backend API" cmd /k "uvicorn api:app --host 0.0.0.0 --port 8000 --reload --log-level debug"
 
 REM 等待后端服务启动
 ping 127.0.0.1 -n 3 > nul

@@ -74,7 +74,7 @@ echo 服务将运行在 http://localhost:8000
 echo 按 Ctrl+C 停止服务
 
 cd "%PROJECT_ROOT%backend"
-uvicorn app.api.api:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.api.api:app --host 0.0.0.0 --port 8000 --reload --log-level %LOG_LEVEL%
 
 if %errorlevel% neq 0 (
     echo 错误: 启动后端服务失败
@@ -129,7 +129,7 @@ echo 前端服务将运行在 http://localhost:3000
 echo 按 Ctrl+C 停止服务
 
 rem 启动后端服务（新窗口）
-start "后端服务" cmd /c "call "%VENV_DIR%\Scripts\activate.bat" && set PYTHONPATH=%PROJECT_ROOT%\backend && cd "%PROJECT_ROOT%backend" && uvicorn app.api.api:app --host 0.0.0.0 --port 8000 --reload"
+start "后端服务" cmd /c "call "%VENV_DIR%\Scripts\activate.bat" && set PYTHONPATH=%PROJECT_ROOT%\backend && set LOG_LEVEL=%LOG_LEVEL% && cd "%PROJECT_ROOT%backend" && uvicorn app.api.api:app --host 0.0.0.0 --port 8000 --reload --log-level %LOG_LEVEL%"
 
 rem 等待后端服务启动
 echo 等待后端服务启动...
