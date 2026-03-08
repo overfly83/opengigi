@@ -5,7 +5,7 @@
       Conversation History
     </h3>
     
-    <div class="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900 dark:to-indigo-900 p-4 rounded-lg border border-blue-100 dark:border-blue-800 h-full overflow-hidden flex flex-col">
+    <div class="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg border border-blue-100 dark:border-blue-800 h-full overflow-hidden flex flex-col">
       <div v-if="loading" class="flex items-center justify-center py-4">
         <div class="flex items-center space-x-2">
           <div class="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style="animation-delay: 0ms"></div>

@@ -2,15 +2,15 @@
   <div class="h-screen flex flex-col bg-gray-50 overflow-hidden">
     <!-- Header -->
     <header class="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg">
-      <div class="container mx-auto px-4 py-3">
+      <div class="container mx-auto px-4 py-2">
         <div class="flex flex-col md:flex-row justify-between items-center">
-          <div class="flex items-center mb-2 md:mb-0">
-            <div class="w-8 h-8 rounded-full bg-white bg-opacity-20 flex items-center justify-center mr-2">
-              <i class="fas fa-brands fa-bots text-white text-xl"></i>
+          <div class="flex items-center mb-1 md:mb-0">
+            <div class="w-6 h-6 rounded-full bg-white bg-opacity-20 flex items-center justify-center mr-1.5">
+              <i class="fas fa-brands fa-bots text-white text-lg"></i>
             </div>
             <div>
-              <h1 class="text-lg font-bold text-white">GiGi</h1>
-              <p class="text-[9px] text-white text-opacity-80">Based on deepagents framework</p>
+              <h1 class="text-base font-bold text-white">GiGi</h1>
+              <p class="text-[8px] text-white text-opacity-80">Based on deepagents framework</p>
             </div>
           </div>
           <div class="flex items-center space-x-2">
@@ -29,15 +29,11 @@
                 placeholder="user1"
               >
             </div>
-            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showHelp = true">
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-0.5" @click="showHelp = true">
               <i class="fas fa-question-circle mr-1"></i>
               Help
             </button>
-            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showHistory = true">
-              <i class="fas fa-history mr-1"></i>
-              History
-            </button>
-            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-1" @click="showSettings = true">
+            <button class="btn bg-white text-blue-600 hover:bg-gray-100 text-xs px-2 py-0.5" @click="showSettings = true">
               <i class="fas fa-cog mr-1"></i>
               Settings
             </button>
@@ -226,51 +222,7 @@
     <HelpDialog v-model:visible="showHelp" />
     
     <!-- History Dialog -->
-    <div v-if="showHistory" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold text-gray-800">Execution History</h3>
-          <button class="text-gray-400 hover:text-gray-600" @click="showHistory = false">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        
-        <div v-if="history.length > 0" class="space-y-4">
-          <div 
-            v-for="(item, index) in history" 
-            :key="index"
-            class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-          >
-            <div class="flex justify-between items-start mb-2">
-              <h4 class="font-medium text-sm">{{ item.goal }}</h4>
-              <span class="text-xs text-gray-500">{{ item.timestamp }}</span>
-            </div>
-            <div class="text-xs text-gray-600 mb-2">
-              <span class="font-medium">Mode:</span> {{ item.mode === 'streaming' ? 'Streaming' : 'Non-Streaming' }}
-            </div>
-            <div class="text-xs text-gray-600 mb-2">
-              <span class="font-medium">Tasks:</span> {{ item.todos.length }}
-            </div>
-            <div class="text-xs text-gray-600">
-              <span class="font-medium">Status:</span> {{ item.status }}
-            </div>
-            <div class="mt-2">
-              <button 
-                class="text-xs text-blue-600 hover:underline"
-                @click="loadHistoryItem(item)"
-              >
-                Load Details
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div v-else class="text-center py-8 text-gray-500">
-          <i class="fas fa-history text-2xl mb-2"></i>
-          <p class="text-sm">No execution history</p>
-        </div>
-      </div>
-    </div>
+
   </div>
 </template>
 
@@ -282,7 +234,7 @@ import SettingsDialog from './components/SettingsDialog.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { StreamHandler } from './utils/streamHandler'
 import { MessageType, MessageIcon, getMessageColor, getMessageBgColor, normalizeMessageType } from './utils/messageTypes'
-import { saveHistory, loadHistory, createHistoryItem } from './utils/HistoryManager'
+import { saveHistory, createHistoryItem } from './utils/HistoryManager'
 import { generateUuid, startNewConversation, handleLoadThread, handleThreadDeleted } from './utils/SessionManager'
 import { loadSettings, handleSettingsSave, updateSidebarWidth as updateSidebarWidthUtil } from './utils/SettingsManager'
 import { processContentForTodos, updateTodoListOnCompletion } from './utils/TodoManager'
@@ -302,9 +254,8 @@ export default {
   mounted() {
     // 生成sessionUuid
     this.sessionUuid = generateUuid()
-    // 加载设置和历史记录
+    // 加载设置
     this.loadSettings()
-    this.history = loadHistory()
   },
   data() {
     return {
@@ -330,9 +281,7 @@ export default {
         sidebarWidth: 320
       },
       progress: 0, // 执行进度
-      showHistory: false, // 显示历史记录对话框
-      showHelp: false, // 显示帮助对话框
-      history: [] // 执行历史记录
+      showHelp: false // 显示帮助对话框
     }
   },
   computed: {
@@ -422,14 +371,6 @@ export default {
         this.agentStatus = null // 清除状态
         saveHistory(this) // 保存执行历史
       })
-    },
-    
-    loadHistoryItem(item) {
-      // 加载历史记录项到当前界面
-      this.goal = item.goal
-      this.mode = item.mode
-      this.todos = [...item.todos]
-      this.showHistory = false
     },
     
     // 委托给工具类的方法
